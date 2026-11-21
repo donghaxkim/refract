@@ -21,7 +21,7 @@
     const Engine = global.SpectraEngine || (engine && engine.constructor) || {};
     const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Spectra UI] engine.' + name, e); } };
 
-    let material = 'glass', uiHidden = false, paused = false;
+    let material = 'glass', uiHidden = false, paused = false, api = null;
     let buildToken = 0, activeSample = null, exporting = null, logoName = '';
 
     /* ───── toast ───── */
@@ -38,6 +38,14 @@
       const open = openPop && !openPop.hidden ? openPop : null;
       toastEl.style.bottom = open ? 'calc(100% + ' + (open.offsetHeight + 22) + 'px)' : '';
     }
+
+    /* ───── scene lock: while the camera records / previews / renders, or any render runs, the scene must not change ───── */
+    function lockReason() {
+      const cam = api && api.camera; const r = cam && cam.lockReason ? cam.lockReason() : '';
+      if (r) return r;
+      return engine && engine.busy ? 'Not while exporting' : '';
+    }
+    function blocked() { const r = lockReason(); if (r) toast(r, null, 1800); return !!r; }
 
     /* ───── material ───── */
     function placeIndicator(anim) {
@@ -57,10 +65,10 @@
       placeIndicator(anim !== false);
       call('setMaterial', m);
     }
-    seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b) setMaterial(b.dataset.material); });
+    seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b && !blocked()) setMaterial(b.dataset.material); });
     seg.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault(); const m = material === 'glass' ? 'chrome' : 'glass';
+        e.preventDefault(); if (blocked()) return; const m = material === 'glass' ? 'chrome' : 'glass';
         setMaterial(m); $('button[data-material="' + m + '"]', seg).focus();
       }
     });
@@ -109,7 +117,8 @@
       const bind = (id, key) => {
         const el = $('#' + id), out = $('#' + id + '-v');
         const paint = () => { el.style.setProperty('--p', el.value + '%'); out.textContent = el.value; };
-        el.addEventListener('input', () => { paint(); st[key] = el.value / 100; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => call('setShape', { ...st })); });
+        let applied = el.value;
+        el.addEventListener('input', () => { if (blocked()) { el.value = applied; paint(); return; } applied = el.value; paint(); st[key] = el.value / 100; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => call('setShape', { ...st })); });
         el.addEventListener('dblclick', () => { el.value = key === 'thickness' ? 50 : 65; el.dispatchEvent(new Event('input')); });
         paint();
       };
@@ -122,6 +131,7 @@
     function setSource(v) { pick('source', v); call('setLightSource', v); }
     popLight.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
+      if ((b.dataset.light || b.dataset.theme || b.dataset.source) && blocked()) return;
       if (b.dataset.light) setLight(b.dataset.light);
       if (b.dataset.theme) setTheme(b.dataset.theme);
       if (b.dataset.source) setSource(b.dataset.source);
@@ -182,7 +192,7 @@
       b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', s.name || 'Sample ' + (i + 1)); b.title = s.name || '';
       const url = whiteSvgURL(s.svg);
       if (url) { const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = url; b.appendChild(img); }
-      b.addEventListener('click', () => loadSample(i));
+      b.addEventListener('click', () => { if (!blocked()) loadSample(i); });
       sampleRow.appendChild(b);
     });
     function markSample(sid, busy) {
@@ -220,6 +230,7 @@
     }
     async function loadFile(file) {
       if (!file) return;
+      if (blocked()) return;
       const name = file.name || 'file';
       const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(name);
       const isImg = /^image\/(png|jpe?g|webp)$/i.test(file.type) || /\.(png|jpe?g|webp)$/i.test(name);
@@ -235,12 +246,12 @@
       return buildField({ type: 'image', blob: file }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
     }
     const fileIn = $('#sp-file');
-    $('#sp-pick').addEventListener('click', () => fileIn.click());
+    $('#sp-pick').addEventListener('click', () => { if (!blocked()) fileIn.click(); });
     fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; loadFile(f); });
     const wordForm = $('#sp-word'), wordIn = $('#sp-word-in');
     wordForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const w = wordIn.value.trim(); if (!w) return;
+      const w = wordIn.value.trim(); if (!w || blocked()) return;
       activeSample = null; markSample(null);
       buildField({ type: 'text', text: w, fontFamily: '"Instrument Sans", Inter, system-ui, sans-serif', fontWeight: 700 }, { done: 'Using “' + w + '”', name: w });
       wordIn.blur(); close();
@@ -249,7 +260,7 @@
     // drag & drop anywhere
     const dz = $('#sp-dropzone'); let depth = 0;
     const hasFiles = (e) => e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0;
-    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; dz.classList.add('is-on'); });
+    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; if (!lockReason()) dz.classList.add('is-on'); });
     window.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
     window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) dz.classList.remove('is-on'); });
     window.addEventListener('drop', (e) => {
@@ -369,6 +380,35 @@
 
     /* ───── pointer → engine ───── */
     let hinted = false, drag = null;
+    // Camera mode: only steer while the pointer is inside the viewfinder (and not on a camera control); elsewhere, and when the
+    // pointer leaves the window, the last aim is held so the composition doesn't swing on the way to Shutter / Stop.
+    const camOpen = () => !!(api && api.camera && api.camera.isOpen());
+    // The path from the logo to Shutter / Stop crosses the lower part of the frame, so on leaving the steering area the light is put
+    // back where that last, roughly straight stroke out began: the move to a control never becomes the composition. Geometric
+    // rather than timed, so it holds however laggy the live view (and so the pointer event rate) is.
+    let trail = [], steering = false;
+    function rewindPoint() {
+      const n = trail.length, E = trail[n - 1]; let j = n - 1;
+      while (j > 0 && Math.hypot(E[0] - trail[j][0], E[1] - trail[j][1]) < 24) j--; // local exit direction, over ≥ 24 px
+      const dx = E[0] - trail[j][0], dy = E[1] - trail[j][1], L = Math.hypot(dx, dy);
+      if (L < 24) return [E[0], E[1], curAng()]; // barely moved: hold where it is
+      const ux = dx / L, uy = dy / L; let k = n - 1;
+      for (let i = n - 2; i >= 0; i--) {
+        const sx = trail[i + 1][0] - trail[i][0], sy = trail[i + 1][1] - trail[i][1], sl = Math.hypot(sx, sy);
+        if (sl > 2 && (sx * ux + sy * uy) / sl < 0.7) break; // the stroke turned (> ~45°): this is where it began
+        k = i;
+      }
+      // near the logo the pointer doesn't set the light's angle, so also restore the angle it had while the pointer was there
+      // (the target as seen when the next point arrived, i.e. after frames with this point applied)
+      return [trail[k][0], trail[k][1], (trail[k + 1] || [0, 0, curAng()])[2]];
+    }
+    const curAng = () => (engine && engine.target ? engine.target.ang : null);
+    function camSteers(e) {
+      if (!camOpen() || !api.camera.steers) { trail.length = 0; steering = false; return true; }
+      if (api.camera.steers(e)) { trail.push(toCanvas(e).concat(curAng())); if (trail.length > 96) trail.shift(); steering = true; return true; }
+      if (steering && trail.length) { const p = rewindPoint(); call('setPointer', p[0], p[1]); if (p[2] != null && engine.target) engine.target.ang = p[2]; }
+      steering = false; trail.length = 0; return false;
+    }
     function toCanvas(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
     function dismissHint() { if (hinted) return; hinted = true; setTimeout(() => hint.classList.add('is-gone'), 2600); }
     // hover steers the light; press-and-drag spins the logo (touch: drag spins, tap aims the light)
@@ -378,6 +418,7 @@
         call('rotateBy', dx, dy); dismissHint(); return;
       }
       if (e.pointerType === 'touch') return;
+      if (!camSteers(e)) return; // camera: hold the composed aim while the pointer is on the controls
       const p = toCanvas(e); call('setPointer', p[0], p[1]); dismissHint();
     }, { passive: true });
     canvas.addEventListener('pointerdown', (e) => {
@@ -388,14 +429,14 @@
     });
     const endDrag = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
-      if (drag.touch && drag.moved < 8) { const p = toCanvas(e); call('setPointer', p[0], p[1]); }
+      if (drag.touch && drag.moved < 8 && camSteers(e)) { const p = toCanvas(e); call('setPointer', p[0], p[1]); }
       drag = null; canvas.classList.remove('is-dragging'); call('endRotate');
     };
     window.addEventListener('pointerup', endDrag); window.addEventListener('pointercancel', endDrag);
     canvas.addEventListener('dblclick', () => call('resetRotation'));
-    document.documentElement.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !drag) call('setPointer', null); });
-    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget && !e.toElement && !drag) call('setPointer', null); });
-    window.addEventListener('blur', () => call('setPointer', null));
+    document.documentElement.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !drag && !camOpen()) call('setPointer', null); });
+    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget && !e.toElement && !drag && !camOpen()) call('setPointer', null); });
+    window.addEventListener('blur', () => { if (!camOpen()) call('setPointer', null); });
 
     /* ───── keyboard ───── */
     function setHidden(h) {
@@ -411,8 +452,7 @@
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      if (k === 'g') setMaterial('glass');
-      else if (k === 'c') setMaterial('chrome');
+      if (k === 'g' || k === 'c') { if (!blocked()) setMaterial(k === 'g' ? 'glass' : 'chrome'); }
       else if (k === 'h') setHidden(!uiHidden);
       else if (e.key === ' ' || e.code === 'Space') {
         if (t && t.tagName === 'BUTTON' && t.matches(':focus-visible')) return; // keyboard users: Space activates the focused button
@@ -436,6 +476,16 @@
     if (engine && typeof engine.on === 'function') {
       engine.on('error', (e) => { console.error('[Spectra UI] engine error', e); toast((e && e.message) || 'Rendering error', 'err', 4200); });
       engine.on('ready', () => ui.classList.add('is-in'));
+      // the engine changed its look by itself (timeline replay / restore): make the pill agree, without calling back into it
+      engine.on('look', (l) => {
+        if (!l) return;
+        if ((l.material === 'glass' || l.material === 'chrome') && l.material !== material) {
+          material = l.material;
+          $$('button[data-material]', seg).forEach((b) => { const on = b.dataset.material === material; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+          placeIndicator(false);
+        }
+        pick('light', l.lightMode); pick('theme', l.theme); root.classList.toggle('is-light', l.theme === 'light'); pick('source', l.source);
+      });
     }
 
     /* ───── boot ───── */
@@ -450,7 +500,7 @@
     }
     if (!engine) toast('Renderer unavailable in this browser', 'err', 6000);
 
-    const api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
+    api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, isExporting: () => !!exporting, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
     // camera mode (src/camera.js): Photo / Video / Loop with viewfinder, trimmer and offline capture
     if (global.SpectraCamera) { try { api.camera = global.SpectraCamera.init(engine, api); } catch (e) { console.error('[Spectra UI] camera', e); } }
     return api;
