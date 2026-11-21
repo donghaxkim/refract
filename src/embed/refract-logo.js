@@ -1,12 +1,12 @@
-/* Spectra — src/embed/spectra-logo.js
- * <spectra-logo> custom element: an embeddable, framework-free Spectra render.
- * Built by build-embed.mjs into dist/spectra-logo.js together with samples.js, sdf.js and engine.js;
- * this file expects `DEPS = { Engine, SDF, Samples }` from that wrapper (it never touches window.Spectra*).
+/* Refract — src/embed/refract-logo.js
+ * <refract-logo> custom element: an embeddable, framework-free Refract render.
+ * Built by build-embed.mjs into dist/refract-logo.js together with samples.js, sdf.js and engine.js;
+ * this file expects `DEPS = { Engine, SDF, Samples }` from that wrapper (it never touches window.Refract*).
  */
 /* global DEPS */
 (function (Engine, SDF, Samples) {
   'use strict';
-  if (typeof window === 'undefined' || !window.customElements || customElements.get('spectra-logo')) return;
+  if (typeof window === 'undefined' || !window.customElements || customElements.get('refract-logo')) return;
 
   const ATTRS = ['src', 'text', 'sample', 'font', 'material', 'light', 'theme', 'background', 'transparent', 'thickness', 'roundness', 'interactive', 'poster', 'alt'];
   const THEME_BG = { dark: '#121216', light: '#d3d0ca' }; // what each theme's backdrop tone-maps to (pre-render / fallback fill)
@@ -42,7 +42,7 @@
 .fb{container-type:inline-size}
 @media (prefers-reduced-motion:reduce){.cv,.poster{transition:none}}`;
 
-  class SpectraLogo extends HTMLElement {
+  class RefractLogo extends HTMLElement {
     static get observedAttributes() { return ATTRS; }
     constructor() {
       super();
@@ -296,5 +296,5 @@
     // 'error' doesn't bubble: a bubbling 'error' would reach window.onerror / page error monitors
     _emit(type, detail) { const b = type !== 'error'; this.dispatchEvent(new CustomEvent(type, { detail, bubbles: b, composed: b })); }
   }
-  customElements.define('spectra-logo', SpectraLogo);
+  customElements.define('refract-logo', RefractLogo);
 })(DEPS.Engine, DEPS.SDF, DEPS.Samples);

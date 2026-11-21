@@ -9,20 +9,20 @@ const js = ['./src/samples.js', './src/sdf.js', './src/engine.js', './src/mesh.j
 const boot = `
 (function(){
   function fail(msg){
-    var el = document.createElement('div'); el.className = 'spectra-fatal';
+    var el = document.createElement('div'); el.className = 'refract-fatal';
     el.setAttribute('role','alert');
-    el.innerHTML = '<strong>Spectra needs WebGL2</strong><span>' + msg + '</span>';
+    el.innerHTML = '<strong>Refract needs WebGL2</strong><span>' + msg + '</span>';
     document.body.appendChild(el);
   }
   function start(){
-    var canvas = document.getElementById('spectra-canvas');
+    var canvas = document.getElementById('refract-canvas');
     var engine;
-    try { engine = new SpectraEngine(canvas); }
+    try { engine = new RefractEngine(canvas); }
     catch (e) { console.error(e); fail(String(e && e.message || e)); return; }
-    window.spectra = engine;
+    window.refract = engine;
     var ro = new ResizeObserver(function(){ engine.resize(); }); ro.observe(canvas);
     window.addEventListener('resize', function(){ engine.resize(); });
-    try { SpectraUI.init(engine, { SpectraSDF: window.SpectraSDF, SpectraSamples: window.SpectraSamples, defaultSample: 'spark' }); }
+    try { RefractUI.init(engine, { RefractSDF: window.RefractSDF, RefractSamples: window.RefractSamples, defaultSample: 'hermes' }); }
     catch (e) { console.error(e); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
@@ -32,12 +32,12 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Spectra</title>
+<title>Refract</title>
 <meta name="description" content="Turn any SVG logo into spectral glass or chrome, rendered live with WebGL2.">
 ${head}
 <style>
 ${css}
-.spectra-fatal{position:fixed;inset:auto 16px 16px 16px;margin:auto;max-width:420px;padding:16px 18px;border-radius:12px;background:#111214;color:#e8e8ea;border:1px solid rgba(255,255,255,.12);font:13px/1.5 system-ui,sans-serif;display:grid;gap:4px;z-index:9999}
+.refract-fatal{position:fixed;inset:auto 16px 16px 16px;margin:auto;max-width:420px;padding:16px 18px;border-radius:12px;background:#111214;color:#e8e8ea;border:1px solid rgba(255,255,255,.12);font:13px/1.5 system-ui,sans-serif;display:grid;gap:4px;z-index:9999}
 </style>
 </head>
 <body>

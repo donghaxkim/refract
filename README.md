@@ -1,4 +1,4 @@
-# Spectra
+# Refract
 
 Turn any logo into glass. A beam of white light refracts through your logo's real outline and leaves as a continuous rainbow, rendered live in WebGL2 with zero dependencies.
 
@@ -14,26 +14,26 @@ Open `dist/index.html` in a browser. It's one self-contained file, so you can dr
 
 ## Embed on your site
 
-`dist/spectra-logo.js` is one file with no dependencies (~37 KB gzipped).
+`dist/refract-logo.js` is one file with no dependencies (~37 KB gzipped).
 
 ```html
-<script src="spectra-logo.js"></script>   <!-- or: import './spectra-logo.js' -->
-<spectra-logo sample="spark" background="#0b0b0c" style="height:480px"></spectra-logo>
+<script src="refract-logo.js"></script>   <!-- or: import './refract-logo.js' -->
+<refract-logo sample="hermes" background="#0b0b0c" style="height:480px"></refract-logo>
 ```
 
-- **Logo:** `src` (SVG/PNG URL, needs CORS if cross-origin), `text` (+ optional `font`), or `sample` (spark, links, loop, ribbon, mono, gem).
+- **Logo:** `src` (SVG/PNG URL, needs CORS if cross-origin), `text` (+ optional `font`), or `sample` (hermes, x, vercel).
 - **Look:** `light` (beam | studio), `thickness`, `roundness` (0–100). Glass on the light theme only, for now.
 - **Page:** set `background` to your page colour so the render blends into it. This keeps the full look, because the glass still has a backdrop to bend. `transparent` gives true alpha but looks flatter (WebGL can't see the page behind it). Avoid pure `#fff`: the beam can't be brighter than white, so use an off-white.
 - **Behaviour:** `interactive="false"` disables hover/drag; `poster` and `alt` for the fallback. Events: `ready`, `error` (`detail.phase`).
 - Loads lazily near the viewport, pauses offscreen and in hidden tabs, shows a still frame for reduced motion, and falls back to the poster (or a static logo) without WebGL2. Each instance uses one WebGL context, and browsers allow about 16 per page.
-- **React:** `import { SpectraLogo } from './spectra-logo-react.js'`. Props map to attributes; `onReady` and `onError` are forwarded. It's safe to import during server-side rendering.
+- **React:** `import { RefractLogo } from './refract-logo-react.js'`. Props map to attributes; `onReady` and `onError` are forwarded. It's safe to import during server-side rendering.
 
 See `dist/embed-demo.html` (serve it over http).
 
 ## Develop
 
 ```bash
-npm run build         # app (dist/index.html) + embed (dist/spectra-logo*.js)
+npm run build         # app (dist/index.html) + embed (dist/refract-logo*.js)
 npm run build:app     # just the app
 npm run build:embed   # just the component
 ```
@@ -42,7 +42,7 @@ npm run build:embed   # just the component
 |---|---|
 | `src/engine.js` | Renderer: 3D beam tracer, raymarched glass/chrome, themes, export |
 | `src/mesh.js` | Distance field → watertight mesh, GLB and STL writers (runs in a Web Worker) |
-| `src/embed/` | The `<spectra-logo>` element, React wrapper and demo page |
+| `src/embed/` | The `<refract-logo>` element, React wrapper and demo page |
 | `src/sdf.js` | SVG / PNG / text → signed distance field (runs in a Web Worker) |
 | `src/samples.js` | The six built-in sample marks |
 | `src/ui.html` / `ui.css` / `ui.js` | The interface |

@@ -1,5 +1,5 @@
-/* Spectra — src/sdf.js
- * window.SpectraSDF : source (SVG text | image Blob | text) -> signed distance field.
+/* Refract — src/sdf.js
+ * window.RefractSDF : source (SVG text | image Blob | text) -> signed distance field.
  *
  * Pipeline
  *   main thread : sanitise / rasterise the source with antialiasing, centred, longest half-extent
@@ -30,7 +30,7 @@
    * Worker core — fully self-contained (stringified into a Blob worker). Returns the
    * computeField function when called outside a worker (main-thread fallback).
    * ===================================================================================== */
-  function spectraSdfWorkerMain() {
+  function refractSdfWorkerMain() {
     'use strict';
     var SQ2 = Math.SQRT2;
     var HALF_SEG = 0.75; // half-length (raster px) of the edge segment attached to each site
@@ -74,7 +74,7 @@
       opts = opts || {};
       var t0 = now();
       var k = R / size;
-      if (k !== Math.floor(k) || k < 1) throw new Error('SpectraSDF: raster must be an integer multiple of size');
+      if (k !== Math.floor(k) || k < 1) throw new Error('RefractSDF: raster must be an integer multiple of size');
       var N = R * R, x, y, i, row, a, j, s;
 
       // guarantee an empty 1px frame (the shape never gets there; keeps neighbour reads in range)
@@ -113,7 +113,7 @@
         }
       }
       rowStart[R - 1] = n; rowStart[R] = n; rowStart[0] = 0;
-      if (n === 0) throw new Error('SpectraSDF: the source contains no visible shape');
+      if (n === 0) throw new Error('RefractSDF: the source contains no visible shape');
 
       // ---- 2. site geometry: sub-pixel edge point + outward normal (+ bbox) -------------
       var ex = new Float32Array(n), ey = new Float32Array(n);
@@ -171,7 +171,7 @@
       list = null;
       if (m2 !== n) { // compacted (iso model): rebuild the per-row index
         n = m2;
-        if (n === 0) throw new Error('SpectraSDF: the source contains no visible shape');
+        if (n === 0) throw new Error('RefractSDF: the source contains no visible shape');
         rowStart.fill(0);
         for (j = 0; j < n; j++) rowStart[qy[j] + 1]++;
         for (y = 0; y < R; y++) rowStart[y + 1] += rowStart[y];
@@ -436,7 +436,7 @@
   // ---------- worker management ----------
   var localCompute = null;
   function computeLocal(msg) {
-    if (!localCompute) localCompute = spectraSdfWorkerMain();
+    if (!localCompute) localCompute = refractSdfWorkerMain();
     return localCompute(msg);
   }
 
@@ -455,7 +455,7 @@
         resolve(null);
       }
       try {
-        var src = '(' + spectraSdfWorkerMain.toString() + ')();';
+        var src = '(' + refractSdfWorkerMain.toString() + ')();';
         url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
         w = new Worker(url);
       } catch (e) { fail(); return; }
@@ -551,7 +551,7 @@
         var done = function () { URL.revokeObjectURL(url); resolve(img); };
         if (img.decode) img.decode().then(done, done); else done();
       };
-      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('SpectraSDF: the SVG could not be rendered')); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('RefractSDF: the SVG could not be rendered')); };
       img.src = url;
     });
   }
@@ -616,7 +616,7 @@
       var s = hd.querySelector('svg');
       if (s && s.namespaceURI === SVG_NS) root = s;
     }
-    if (!root) throw new Error('SpectraSDF: could not parse the SVG');
+    if (!root) throw new Error('RefractSDF: could not parse the SVG');
     return root;
   }
 
@@ -670,7 +670,7 @@
         live.setAttribute('width', '1000'); live.setAttribute('height', '1000');
         var bb = null;
         try { bb = live.getBBox(); } catch (e) { bb = null; }
-        if (!bb || !(bb.width > 0 || bb.height > 0)) throw new Error('SpectraSDF: SVG has no size and no measurable content');
+        if (!bb || !(bb.width > 0 || bb.height > 0)) throw new Error('RefractSDF: SVG has no size and no measurable content');
         var pad = 0.2 * Math.max(bb.width, bb.height) + 4;
         vb = [bb.x - pad, bb.y - pad, bb.width + 2 * pad, bb.height + 2 * pad];
         notes.push('viewBox derived from content bbox');
@@ -784,7 +784,7 @@
     var cov1 = alphaOf(cv1.ctx, m.w, m.h);
     releaseCanvas(cv1);
     var bb = covBBox(cov1, m.w, m.h, 0);
-    if (!bb) throw new Error('SpectraSDF: the SVG contains no visible shapes');
+    if (!bb) throw new Error('RefractSDF: the SVG contains no visible shapes');
     var vb = prep.vb;
     var ux0 = vb[0] + bb.x0 / m.sx, ux1 = vb[0] + bb.x1 / m.sx;
     var uy0 = vb[1] + bb.y0 / m.sy, uy1 = vb[1] + bb.y1 / m.sy;
@@ -808,7 +808,7 @@
     var lines = text.split(/\r?\n/).map(function (s) { return s.replace(/\s+$/, ''); });
     while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
     while (lines.length && !lines[0].trim()) lines.shift();
-    if (!lines.length) throw new Error('SpectraSDF: text is empty');
+    if (!lines.length) throw new Error('RefractSDF: text is empty');
     var family = src.fontFamily || 'Inter, system-ui, sans-serif';
     var weight = src.fontWeight || 700;
     var style = src.fontStyle || 'normal';
@@ -834,7 +834,7 @@
       y0 = Math.min(y0, by - mt.actualBoundingBoxAscent); y1 = Math.max(y1, by + mt.actualBoundingBoxDescent);
     });
     releaseCanvas(cvm);
-    if (!(x1 > x0) || !(y1 > y0)) throw new Error('SpectraSDF: text has no visible glyphs');
+    if (!(x1 > x0) || !(y1 > y0)) throw new Error('RefractSDF: text has no visible glyphs');
     var s = (FILL_HALF * R / 2) / (Math.max(x1 - x0, y1 - y0) / 2);
     var bcx = (x0 + x1) / 2, bcy = (y0 + y1) / 2;
     var cv = makeCanvas(R, R), ctx = cv.ctx;
@@ -855,7 +855,7 @@
     var bmp = await createImageBitmap(blob);
     var decodeMs = now() - td;
     var W0 = bmp.width, H0 = bmp.height;
-    if (!(W0 > 0 && H0 > 0)) throw new Error('SpectraSDF: empty image');
+    if (!(W0 > 0 && H0 > 0)) throw new Error('RefractSDF: empty image');
     var s0 = Math.min(1, 2048 / Math.max(W0, H0));
     var w = Math.max(1, Math.round(W0 * s0)), h = Math.max(1, Math.round(H0 * s0));
     var cva = makeCanvas(w, h);
@@ -888,7 +888,7 @@
         var dd = Math.sqrt(dr * dr + dg * dg + db * db);
         dist[i] = dd; if (dd > maxD) maxD = dd;
       }
-      if (maxD < 24) throw new Error('SpectraSDF: could not separate the shape from the background');
+      if (maxD < 24) throw new Error('RefractSDF: could not separate the shape from the background');
       if (lossyMime) {
         // JPEG & co. store chroma at half resolution: if luma alone separates the shape, use it
         var Ybg = 0.2126 * br + 0.7152 * bg + 0.0722 * bb2, distY = new Float32Array(n), ys = [], maxY = 0;
@@ -929,7 +929,7 @@
     }
     despeckle(cov, w, h);
     var bbx = covBBox(cov, w, h, 8);
-    if (!bbx) throw new Error('SpectraSDF: the image contains no visible shape');
+    if (!bbx) throw new Error('RefractSDF: the image contains no visible shape');
     // A raster has no more edge information than its own pixels: upsampling the coverage would bake
     // the source pixel grid into the edge (periodic ripples). Instead the exact AA-EDT runs at source
     // resolution on a square domain covering the whole field, and the (locally linear) distance is
@@ -1024,7 +1024,7 @@
     opts = opts || {};
     var src = normaliseSource(source);
     var size = Math.round(opts.size || 1024);
-    if (!(size >= 32 && size <= 4096)) throw new Error('SpectraSDF: size must be in [32, 4096]');
+    if (!(size >= 32 && size <= 4096)) throw new Error('RefractSDF: size must be in [32, 4096]');
     var rs = chooseRaster(size, opts), R = rs.R;
     var t0 = now();
     var r;
@@ -1034,10 +1034,10 @@
     } else if (src.type === 'text') {
       r = await rasterText(src, R);
     } else if (src.type === 'image') {
-      if (!src.blob) throw new Error('SpectraSDF: image source needs a blob');
+      if (!src.blob) throw new Error('RefractSDF: image source needs a blob');
       r = await rasterImage(src.blob, R);
     } else {
-      throw new Error('SpectraSDF: unknown source type ' + src.type);
+      throw new Error('RefractSDF: unknown source type ' + src.type);
     }
     var t1 = now();
     var res;
@@ -1045,7 +1045,7 @@
     try {
       res = await runEDT(r, R, size, { domain: r.domain, edgeModel: r.edgeModel, smooth: opts.smooth !== false, debugSites: !!opts.debugSites, refinePx: opts.refinePx });
     } catch (e) {
-      if (/worker crashed/.test(String(e && e.message))) throw new Error('SpectraSDF: worker crashed (out of memory?) — try a smaller size');
+      if (/worker crashed/.test(String(e && e.message))) throw new Error('RefractSDF: worker crashed (out of memory?) — try a smaller size');
       throw e;
     }
     var t2 = now();
@@ -1118,7 +1118,7 @@
     return c;
   }
 
-  global.SpectraSDF = {
+  global.RefractSDF = {
     build: build,
     toPreviewCanvas: toPreviewCanvas,
     sample: sampleField,                 // (field, xPix, yPix) -> bilinear distance (logo units)

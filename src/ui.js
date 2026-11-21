@@ -1,7 +1,7 @@
-/* Spectra v2 — src/ui2.js
- * window.SpectraUI = { init(engine, deps) }   deps = { SpectraSDF, SpectraSamples, defaultSample? }
+/* Refract v2 — src/ui2.js
+ * window.RefractUI = { init(engine, deps) }   deps = { RefractSDF, RefractSamples, defaultSample? }
  * Plain browser JS. Binds the minimal UI (wordmark, one pill, two popovers, drop frame, hint, toast)
- * to the SpectraEngine v2 API. The boot script owns engine creation and resize.
+ * to the RefractEngine v2 API. The boot script owns engine creation and resize.
  */
 (function (global) {
   'use strict';
@@ -13,19 +13,19 @@
 
   function init(engine, deps) {
     deps = deps || {};
-    const root = $('#sp-root'), ui = $('#sp-ui'), canvas = $('#spectra-canvas');
-    const pill = $('#sp-pill'), dock = $('#sp-dock'), seg = $('#sp-seg'), ind = $('#sp-seg-ind');
-    const btnLogo = $('#sp-logo'), btnExport = $('#sp-export'), btnLight = $('#sp-light');
-    const popLogo = $('#sp-pop-logo'), popExport = $('#sp-pop-export'), popLight = $('#sp-pop-light');
-    const hint = $('#sp-hint');
-    const Engine = global.SpectraEngine || (engine && engine.constructor) || {};
-    const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Spectra UI] engine.' + name, e); } };
+    const root = $('#rf-root'), ui = $('#rf-ui'), canvas = $('#refract-canvas');
+    const pill = $('#rf-pill'), dock = $('#rf-dock'), seg = $('#rf-seg'), ind = $('#rf-seg-ind');
+    const btnLogo = $('#rf-logo'), btnExport = $('#rf-export'), btnLight = $('#rf-light');
+    const popLogo = $('#rf-pop-logo'), popExport = $('#rf-pop-export'), popLight = $('#rf-pop-light');
+    const hint = $('#rf-hint');
+    const Engine = global.RefractEngine || (engine && engine.constructor) || {};
+    const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Refract UI] engine.' + name, e); } };
 
     let material = 'glass', uiHidden = false, paused = false;
     let buildToken = 0, activeSample = null, exporting = null, logoName = '';
 
     /* ───── toast ───── */
-    const toastEl = $('#sp-toast'); let toastT = 0;
+    const toastEl = $('#rf-toast'); let toastT = 0;
     function toast(msg, kind, ms) {
       toastEl.textContent = msg;
       toastEl.classList.toggle('is-err', kind === 'err');
@@ -113,7 +113,7 @@
         el.addEventListener('dblclick', () => { el.value = key === 'thickness' ? 50 : 65; el.dispatchEvent(new Event('input')); });
         paint();
       };
-      bind('sp-thick', 'thickness'); bind('sp-round', 'roundness');
+      bind('rf-thick', 'thickness'); bind('rf-round', 'roundness');
     })();
     /* ───── light mode & background ───── */
     function pick(attr, val) { $$('button[data-' + attr + ']', popLight).forEach((b) => b.setAttribute('aria-checked', String(b.dataset[attr] === val))); }
@@ -145,11 +145,11 @@
         return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
       } catch (e) { return null; }
     }
-    const samples = deps.SpectraSamples || global.SpectraSamples || [];
-    const sampleRow = $('#sp-samples');
+    const samples = deps.RefractSamples || global.RefractSamples || [];
+    const sampleRow = $('#rf-samples');
     samples.forEach((s, i) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'sp-smp'; b.dataset.sid = s.id || String(i);
+      b.type = 'button'; b.className = 'rf-smp'; b.dataset.sid = s.id || String(i);
       b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', s.name || 'Sample ' + (i + 1)); b.title = s.name || '';
       const url = whiteSvgURL(s.svg);
       if (url) { const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = url; b.appendChild(img); }
@@ -157,7 +157,7 @@
       sampleRow.appendChild(b);
     });
     function markSample(sid, busy) {
-      $$('.sp-smp', sampleRow).forEach((b) => {
+      $$('.rf-smp', sampleRow).forEach((b) => {
         const on = sid != null && b.dataset.sid === sid;
         b.setAttribute('aria-pressed', String(on)); b.classList.toggle('is-busy', !!busy && on);
       });
@@ -169,7 +169,7 @@
     }
     async function buildField(source, opts) {
       opts = opts || {};
-      const SDF = deps.SpectraSDF || global.SpectraSDF;
+      const SDF = deps.RefractSDF || global.RefractSDF;
       if (!SDF || typeof SDF.build !== 'function') { toast('Shape builder isn’t available', 'err'); return; }
       const token = ++buildToken;
       btnLogo.classList.add('is-busy');
@@ -181,7 +181,7 @@
         logoName = opts.name || '';
         if (opts.done) toast(opts.done);
       } catch (e) {
-        console.error('[Spectra UI] build failed', e);
+        console.error('[Refract UI] build failed', e);
         if (token !== buildToken) return;
         markSample(activeSample, false);
         toast(opts.fail || 'Couldn’t read that shape. Try an SVG, or a PNG with transparency.', 'err', 4200);
@@ -205,10 +205,10 @@
       }
       return buildField({ type: 'image', blob: file }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
     }
-    const fileIn = $('#sp-file');
-    $('#sp-pick').addEventListener('click', () => fileIn.click());
+    const fileIn = $('#rf-file');
+    $('#rf-pick').addEventListener('click', () => fileIn.click());
     fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; loadFile(f); });
-    const wordForm = $('#sp-word'), wordIn = $('#sp-word-in');
+    const wordForm = $('#rf-word'), wordIn = $('#rf-word-in');
     wordForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const w = wordIn.value.trim(); if (!w) return;
@@ -218,7 +218,7 @@
     });
 
     // drag & drop anywhere
-    const dz = $('#sp-dropzone'); let depth = 0;
+    const dz = $('#rf-dropzone'); let depth = 0;
     const hasFiles = (e) => e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0;
     window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; dz.classList.add('is-on'); });
     window.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
@@ -254,10 +254,10 @@
     }
 
     /* ───── export ───── */
-    const xpPng = $('#sp-xp-png'), xpMp4 = $('#sp-xp-mp4'), mp4Wrap = $('#sp-xp-mp4-wrap');
-    const prog = $('#sp-prog'), progFill = $('#sp-prog-fill'), progPct = $('#sp-prog-pct'), progLabel = $('#sp-prog-label');
-    const xp3d = $('#sp-xp-3d'), xpGlb = $('#sp-xp-glb'), xpStl = $('#sp-xp-stl');
-    const Mesh = deps.SpectraMesh || global.SpectraMesh || null;
+    const xpPng = $('#rf-xp-png'), xpMp4 = $('#rf-xp-mp4'), mp4Wrap = $('#rf-xp-mp4-wrap');
+    const prog = $('#rf-prog'), progFill = $('#rf-prog-fill'), progPct = $('#rf-prog-pct'), progLabel = $('#rf-prog-label');
+    const xp3d = $('#rf-xp-3d'), xpGlb = $('#rf-xp-glb'), xpStl = $('#rf-xp-stl');
+    const Mesh = deps.RefractMesh || global.RefractMesh || null;
     let meshAbort = null;
     const canVideo = () => { try { return !!Engine.canRenderVideo; } catch (e) { return false; } };
     function viewSize() { return [Math.max(1, canvas.clientWidth || window.innerWidth), Math.max(1, canvas.clientHeight || window.innerHeight)]; }
@@ -266,8 +266,8 @@
     function stamp() { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); }
     function refreshExport() {
       const p = pngSize(), v = videoSize();
-      $('#sp-xp-png-s').textContent = p[0] + '×' + p[1];
-      $('#sp-xp-mp4-s').textContent = v[0] + '×' + v[1] + ', 6s';
+      $('#rf-xp-png-s').textContent = p[0] + '×' + p[1];
+      $('#rf-xp-mp4-s').textContent = v[0] + '×' + v[1] + ', 6s';
       mp4Wrap.hidden = !canVideo();
       xpPng.disabled = !!exporting; xpMp4.disabled = !!exporting;
       xp3d.hidden = !Mesh;
@@ -279,7 +279,7 @@
       f = clamp(f || 0, 0, 1);
       progFill.style.setProperty('--p', f.toFixed(4));
       progPct.textContent = Math.round(f * 100) + '%';
-      prog.querySelector('.sp-prog-bar').setAttribute('aria-valuenow', String(Math.round(f * 100)));
+      prog.querySelector('.rf-prog-bar').setAttribute('aria-valuenow', String(Math.round(f * 100)));
       if (label) progLabel.textContent = label;
     }
     const isAbort = (e) => e && (e.name === 'AbortError' || /cancel|abort/i.test(e.message || ''));
@@ -287,29 +287,29 @@
       if (exporting) return;
       exporting = 'png'; refreshExport();
       const s = pngSize();
-      const old = xpPng.querySelector('.sp-row-s').textContent;
+      const old = xpPng.querySelector('.rf-row-s').textContent;
       try {
-        const blob = await engine.renderStill({ width: s[0], height: s[1], onProgress: (f) => { if (typeof f === 'number') xpPng.querySelector('.sp-row-s').textContent = Math.round(clamp(f, 0, 1) * 100) + '%'; } });
+        const blob = await engine.renderStill({ width: s[0], height: s[1], onProgress: (f) => { if (typeof f === 'number') xpPng.querySelector('.rf-row-s').textContent = Math.round(clamp(f, 0, 1) * 100) + '%'; } });
         if (!blob) throw new Error('empty');
-        close(); await saveBlob(blob, 'spectra-' + stamp() + '.png');
+        close(); await saveBlob(blob, 'refract-' + stamp() + '.png');
       } catch (e) {
-        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] renderStill', e); toast('PNG export failed', 'err'); }
-      } finally { exporting = null; xpPng.querySelector('.sp-row-s').textContent = old; refreshExport(); }
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Refract UI] renderStill', e); toast('PNG export failed', 'err'); }
+      } finally { exporting = null; xpPng.querySelector('.rf-row-s').textContent = old; refreshExport(); }
     });
     xpMp4.addEventListener('click', async () => {
       if (exporting || !canVideo()) return;
       exporting = 'mp4'; refreshExport();
       const v = videoSize();
       xpMp4.hidden = true; prog.hidden = false; setProg(0, 'Rendering loop');
-      $('#sp-cancel').focus();
+      $('#rf-cancel').focus();
       try {
         const blob = await engine.renderVideo({ width: v[0], height: v[1], fps: 30, seconds: 6, onProgress: (f) => setProg(typeof f === 'number' ? f : (f && f.progress) || 0) });
         if (!blob) throw new Error('empty');
         setProg(1, 'Saving');
-        await saveBlob(blob, 'spectra-loop-' + stamp() + '.mp4');
+        await saveBlob(blob, 'refract-loop-' + stamp() + '.mp4');
         close();
       } catch (e) {
-        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] renderVideo', e); toast('MP4 export failed', 'err'); }
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Refract UI] renderVideo', e); toast('MP4 export failed', 'err'); }
       } finally {
         exporting = null; prog.hidden = true; xpMp4.hidden = false; refreshExport();
       }
@@ -321,23 +321,23 @@
       exporting = format; refreshExport();
       const home = prog.parentNode, label = format === 'glb' ? 'Building GLB' : 'Building STL';
       wrap.appendChild(prog); btn.hidden = true; prog.hidden = false; setProg(0, high ? label + ' · fine' : label);
-      $('#sp-cancel').focus();
+      $('#rf-cancel').focus();
       const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null; meshAbort = ctl;
       try {
-        const r = await Mesh.export(engine, format, { quality: high ? 'high' : 'standard', name: logoName || 'Spectra logo', material, signal: ctl && ctl.signal, onProgress: (f) => setProg(f * 0.96) });
+        const r = await Mesh.export(engine, format, { quality: high ? 'high' : 'standard', name: logoName || 'Refract logo', material, signal: ctl && ctl.signal, onProgress: (f) => setProg(f * 0.96) });
         setProg(1, 'Saving');
         const blob = new Blob([r.bytes], { type: r.mime });
-        await saveBlob(blob, 'spectra-' + slug(logoName) + '-' + stamp() + '.' + r.ext);
+        await saveBlob(blob, 'refract-' + slug(logoName) + '-' + stamp() + '.' + r.ext);
         close();
       } catch (e) {
-        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] mesh export', e); toast(format.toUpperCase() + ' export failed', 'err'); }
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Refract UI] mesh export', e); toast(format.toUpperCase() + ' export failed', 'err'); }
       } finally {
         meshAbort = null; exporting = null; prog.hidden = true; btn.hidden = false; home.appendChild(prog); refreshExport();
       }
     }
-    xpGlb.addEventListener('click', (e) => exportMesh('glb', xpGlb, $('#sp-xp-glb-wrap'), e.shiftKey));
-    xpStl.addEventListener('click', (e) => exportMesh('stl', xpStl, $('#sp-xp-stl-wrap'), e.shiftKey));
-    $('#sp-cancel').addEventListener('click', () => { if (meshAbort) meshAbort.abort(); else call('cancelRender'); });
+    xpGlb.addEventListener('click', (e) => exportMesh('glb', xpGlb, $('#rf-xp-glb-wrap'), e.shiftKey));
+    xpStl.addEventListener('click', (e) => exportMesh('stl', xpStl, $('#rf-xp-stl-wrap'), e.shiftKey));
+    $('#rf-cancel').addEventListener('click', () => { if (meshAbort) meshAbort.abort(); else call('cancelRender'); });
 
     /* ───── pointer → engine ───── */
     let hinted = false, drag = null;
@@ -403,7 +403,7 @@
 
     /* ───── engine events ───── */
     if (engine && typeof engine.on === 'function') {
-      engine.on('error', (e) => { console.error('[Spectra UI] engine error', e); toast((e && e.message) || 'Rendering error', 'err', 4200); });
+      engine.on('error', (e) => { console.error('[Refract UI] engine error', e); toast((e && e.message) || 'Rendering error', 'err', 4200); });
       engine.on('ready', () => ui.classList.add('is-in'));
     }
 
@@ -423,5 +423,5 @@
     return { toast, setMaterial, loadFile, loadSample, close, hide: setHidden };
   }
 
-  global.SpectraUI = { init };
+  global.RefractUI = { init };
 })(typeof window !== 'undefined' ? window : this);

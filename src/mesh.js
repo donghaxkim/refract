@@ -1,5 +1,5 @@
-/* Spectra — src/mesh.js
- * window.SpectraMesh : turn the logo on screen into a real triangle mesh, and write GLB / STL files.
+/* Refract — src/mesh.js
+ * window.RefractMesh : turn the logo on screen into a real triangle mesh, and write GLB / STL files.
  *
  * Ground truth is the engine's CPU beam tracer (engine.beam, "identical to the shader's extrude()"):
  *   sdf(x,y,z) = roundedRect2D( d2(x,y), |z| ; half-height hz(x,y), corner radius r(x,y) )
@@ -31,7 +31,7 @@
   /* =====================================================================================
    * Mesh core — self-contained (stringified into a worker). Returns buildMesh outside a worker.
    * ===================================================================================== */
-  function spectraMeshCore() {
+  function refractMeshCore() {
     'use strict';
     var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
     var now = function () { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); };
@@ -216,7 +216,7 @@
         CB[j * Nx + i] = (BN[a0 + 1] === b0 && BN[a0 + NX] === b0 && BN[a0 + NX + 1] === b0) ? b0 : -1;
         if (CB[j * Nx + i] !== 0) anyInside = true;
       }
-      if (!anyInside) throw new Error('SpectraMesh: the shape is empty');
+      if (!anyInside) throw new Error('RefractMesh: the shape is empty');
       var LMAX = Math.round(Math.log2(maxB)), M = [null];
       var zOkBlock = function (i0, j0, B) {
         var c00 = Z[j0 * NX + i0], c10 = Z[j0 * NX + i0 + B], c01 = Z[(j0 + B) * NX + i0], c11 = Z[(j0 + B) * NX + i0 + B];
@@ -458,7 +458,7 @@
   var localBuild = null;
   function sourceOf(engine) {
     var b = engine && (engine.beam || engine);
-    if (!b || !b.ok || !b.R || !b.G || !b.sh || !b.s) throw new Error('SpectraMesh: no shape loaded yet');
+    if (!b || !b.ok || !b.R || !b.G || !b.sh || !b.s) throw new Error('RefractMesh: no shape loaded yet');
     return { R: b.R, G: b.G, size: b.s, shape: { depth: b.sh.depth, bevel: b.sh.bevel, inflate: b.sh.inflate, inset: b.sh.inset }, extent: [b.ext[0], b.ext[1]] };
   }
   function abortErr() { var e = new Error('Export cancelled'); e.name = 'AbortError'; return e; }
@@ -477,7 +477,7 @@
       return new Promise(function (resolve, reject) {
         setTimeout(function () { // let the UI paint its busy state first
           if (signal && signal.aborted) { reject(abortErr()); return; }
-          try { if (!localBuild) localBuild = spectraMeshCore(); resolve(localBuild(job, onP)); } catch (e) { reject(e); }
+          try { if (!localBuild) localBuild = refractMeshCore(); resolve(localBuild(job, onP)); } catch (e) { reject(e); }
         }, 30);
       });
     };
@@ -485,7 +485,7 @@
     return new Promise(function (resolve, reject) {
       var w, url;
       try {
-        url = URL.createObjectURL(new Blob(['(' + spectraMeshCore.toString() + ')();'], { type: 'text/javascript' }));
+        url = URL.createObjectURL(new Blob(['(' + refractMeshCore.toString() + ')();'], { type: 'text/javascript' }));
         w = new Worker(url);
       } catch (e) { if (url) URL.revokeObjectURL(url); runLocal().then(resolve, reject); return; }
       var done = false;
@@ -514,7 +514,7 @@
   /** glTF 2.0 binary. Metres, +Y up, logo facing +Z, centred, longest side = size (default 0.2 m). */
   function toGLB(mesh, opts) {
     opts = opts || {};
-    var name = String(opts.name || 'Spectra logo').slice(0, 80);
+    var name = String(opts.name || 'Refract logo').slice(0, 80);
     var size = opts.size || 0.2, material = opts.material === 'chrome' ? 'chrome' : 'glass';
     var src = mesh.positions, nV = src.length / 3, bb = bounds(src);
     var c = [(bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2];
@@ -527,7 +527,7 @@
     var offPos = 0, offNrm = pad4(pos.byteLength), offIdx = offNrm + pad4(nrm.byteLength), binLen = pad4(offIdx + ind.byteLength);
     var thickness = (bb.max[2] - bb.min[2]) * k;
     var mat = material === 'glass' ? {
-      name: 'Spectra glass',
+      name: 'Refract glass',
       pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 0.02 },
       extensions: {
         KHR_materials_transmission: { transmissionFactor: 1 },
@@ -536,11 +536,11 @@
         KHR_materials_dispersion: { dispersion: 1 } // 20/Abbe: Abbe ≈ 20, a strong flint — visible fringes like the on-screen fan
       }
     } : {
-      name: 'Spectra chrome',
+      name: 'Refract chrome',
       pbrMetallicRoughness: { baseColorFactor: [0.96, 0.96, 0.97, 1], metallicFactor: 1, roughnessFactor: 0.05 }
     };
     var json = {
-      asset: { version: '2.0', generator: 'Spectra (spectra mesh export)' },
+      asset: { version: '2.0', generator: 'Refract (refract mesh export)' },
       extensionsUsed: material === 'glass' ? ['KHR_materials_transmission', 'KHR_materials_ior', 'KHR_materials_volume', 'KHR_materials_dispersion'] : undefined,
       scene: 0,
       scenes: [{ name: name, nodes: [0] }],
@@ -580,7 +580,7 @@
     var c = [(bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2];
     var k = size / Math.max(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], 1e-9);
     var nT = I.length / 3, out = new Uint8Array(84 + nT * 50), dv = new DataView(out.buffer);
-    var head = utf8(('Spectra STL ' + String(opts.name || '')).slice(0, 79));
+    var head = utf8(('Refract STL ' + String(opts.name || '')).slice(0, 79));
     out.set(head, 0); dv.setUint32(80, nT, true);
     var X = function (i) { return (src[3 * i] - c[0]) * k; }, Y = function (i) { return (src[3 * i + 1] - c[1]) * k; }, Zf = function (i) { return (src[3 * i + 2] - bb.min[2]) * k; };
     var o = 84;
@@ -609,5 +609,5 @@
     });
   }
 
-  global.SpectraMesh = { extract: extract, toGLB: toGLB, toSTL: toSTL, export: exportFile, _core: spectraMeshCore };
+  global.RefractMesh = { extract: extract, toGLB: toGLB, toSTL: toSTL, export: exportFile, _core: refractMeshCore };
 })(typeof window !== 'undefined' ? window : this);

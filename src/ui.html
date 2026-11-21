@@ -3,95 +3,95 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=JetBrains+Mono:wght@400;500&display=swap">
 -->
-<div id="sp-root" class="sp-root">
-  <canvas id="spectra-canvas" aria-label="Spectra render. Move the pointer to steer the light, drag to spin the logo."></canvas>
+<div id="rf-root" class="rf-root">
+  <canvas id="refract-canvas" aria-label="Refract render. Move the pointer to steer the light, drag to spin the logo."></canvas>
 
-  <div class="sp-ui" id="sp-ui">
-    <div class="sp-mark" aria-label="Spectra">
-      <svg class="sp-mark-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6L13.9 13H2.1z"/></svg>
-      <span>Spectra</span>
+  <div class="rf-ui" id="rf-ui">
+    <div class="rf-mark" aria-label="Refract">
+      <svg class="rf-mark-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6L13.9 13H2.1z"/></svg>
+      <span>Refract</span>
     </div>
 
-    <p class="sp-hint" id="sp-hint" aria-hidden="true"><span class="sp-hint-fine">Move to steer the light · Drag to spin</span><span class="sp-hint-touch">Drag to spin · Tap to aim the light</span></p>
+    <p class="rf-hint" id="rf-hint" aria-hidden="true"><span class="rf-hint-fine">Move to steer the light · Drag to spin</span><span class="rf-hint-touch">Drag to spin · Tap to aim the light</span></p>
 
-    <div class="sp-dock" id="sp-dock">
-      <div class="sp-toast" id="sp-toast" role="status" aria-live="polite"></div>
+    <div class="rf-dock" id="rf-dock">
+      <div class="rf-toast" id="rf-toast" role="status" aria-live="polite"></div>
 
       <!-- Logo popover -->
-      <div class="sp-pop sp-pop--logo" id="sp-pop-logo" role="dialog" aria-label="Choose a logo" hidden>
-        <button type="button" class="sp-drop" id="sp-pick">
+      <div class="rf-pop rf-pop--logo" id="rf-pop-logo" role="dialog" aria-label="Choose a logo" hidden>
+        <button type="button" class="rf-drop" id="rf-pick">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V3M5 6l3-3 3 3M3 10.5v1.75c0 .7.55 1.25 1.25 1.25h7.5c.7 0 1.25-.55 1.25-1.25V10.5"/></svg>
-          <span class="sp-drop-t">Drop an SVG or PNG</span>
-          <span class="sp-drop-s">or click to browse</span>
+          <span class="rf-drop-t">Drop an SVG or PNG</span>
+          <span class="rf-drop-s">or click to browse</span>
         </button>
-        <form class="sp-word" id="sp-word" autocomplete="off">
-          <input id="sp-word-in" type="text" maxlength="24" spellcheck="false" placeholder="or type a word" aria-label="Type a word to use as the prism" enterkeyhint="go">
+        <form class="rf-word" id="rf-word" autocomplete="off">
+          <input id="rf-word-in" type="text" maxlength="24" spellcheck="false" placeholder="or type a word" aria-label="Type a word to use as the prism" enterkeyhint="go">
           <kbd aria-hidden="true">↵</kbd>
         </form>
-        <div class="sp-samples" id="sp-samples" role="group" aria-label="Sample marks"></div>
-        <div class="sp-sliders" role="group" aria-label="Shape">
-          <label class="sp-sl" for="sp-thick"><span class="sp-sl-t">Thickness</span><span class="sp-sl-v" id="sp-thick-v">50</span>
-            <input id="sp-thick" type="range" min="0" max="100" step="1" value="50"></label>
-          <label class="sp-sl" for="sp-round"><span class="sp-sl-t">Roundness</span><span class="sp-sl-v" id="sp-round-v">65</span>
-            <input id="sp-round" type="range" min="0" max="100" step="1" value="65"></label>
+        <div class="rf-samples" id="rf-samples" role="group" aria-label="Sample marks"></div>
+        <div class="rf-sliders" role="group" aria-label="Shape">
+          <label class="rf-sl" for="rf-thick"><span class="rf-sl-t">Thickness</span><span class="rf-sl-v" id="rf-thick-v">50</span>
+            <input id="rf-thick" type="range" min="0" max="100" step="1" value="50"></label>
+          <label class="rf-sl" for="rf-round"><span class="rf-sl-t">Roundness</span><span class="rf-sl-v" id="rf-round-v">65</span>
+            <input id="rf-round" type="range" min="0" max="100" step="1" value="65"></label>
         </div>
-        <input id="sp-file" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden>
+        <input id="rf-file" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden>
       </div>
 
       <!-- Light popover -->
-      <div class="sp-pop sp-pop--light" id="sp-pop-light" role="dialog" aria-label="Lighting" hidden>
-        <p class="sp-pop-label">Light</p>
-        <div class="sp-opts" role="radiogroup" aria-label="Light">
-          <button type="button" class="sp-opt" role="radio" aria-checked="true" data-light="beam"><span class="sp-opt-ico sp-ico-beam" aria-hidden="true"></span><span class="sp-row-t">Beam</span></button>
-          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-light="studio"><span class="sp-opt-ico sp-ico-studio" aria-hidden="true"></span><span class="sp-row-t">Studio</span></button>
+      <div class="rf-pop rf-pop--light" id="rf-pop-light" role="dialog" aria-label="Lighting" hidden>
+        <p class="rf-pop-label">Light</p>
+        <div class="rf-opts" role="radiogroup" aria-label="Light">
+          <button type="button" class="rf-opt" role="radio" aria-checked="true" data-light="beam"><span class="rf-opt-ico rf-ico-beam" aria-hidden="true"></span><span class="rf-row-t">Beam</span></button>
+          <button type="button" class="rf-opt" role="radio" aria-checked="false" data-light="studio"><span class="rf-opt-ico rf-ico-studio" aria-hidden="true"></span><span class="rf-row-t">Studio</span></button>
         </div>
         <!-- Dark/Light background removed for now: always the light background -->
       </div>
 
       <!-- Export popover -->
-      <div class="sp-pop sp-pop--export" id="sp-pop-export" role="dialog" aria-label="Export" hidden>
-        <button type="button" class="sp-row" id="sp-xp-png">
-          <span class="sp-row-t">PNG</span>
-          <span class="sp-row-s" id="sp-xp-png-s">2×</span>
+      <div class="rf-pop rf-pop--export" id="rf-pop-export" role="dialog" aria-label="Export" hidden>
+        <button type="button" class="rf-row" id="rf-xp-png">
+          <span class="rf-row-t">PNG</span>
+          <span class="rf-row-s" id="rf-xp-png-s">2×</span>
         </button>
-        <div class="sp-row sp-row--video" id="sp-xp-mp4-wrap">
-          <button type="button" class="sp-row-hit" id="sp-xp-mp4">
-            <span class="sp-row-t">MP4 loop</span>
-            <span class="sp-row-s" id="sp-xp-mp4-s">6 s</span>
+        <div class="rf-row rf-row--video" id="rf-xp-mp4-wrap">
+          <button type="button" class="rf-row-hit" id="rf-xp-mp4">
+            <span class="rf-row-t">MP4 loop</span>
+            <span class="rf-row-s" id="rf-xp-mp4-s">6 s</span>
           </button>
-          <div class="sp-prog" id="sp-prog" hidden>
-            <div class="sp-prog-top">
-              <span class="sp-row-t" id="sp-prog-label">Rendering</span>
-              <span class="sp-prog-pct" id="sp-prog-pct">0%</span>
-              <button type="button" class="sp-cancel" id="sp-cancel">Cancel</button>
+          <div class="rf-prog" id="rf-prog" hidden>
+            <div class="rf-prog-top">
+              <span class="rf-row-t" id="rf-prog-label">Rendering</span>
+              <span class="rf-prog-pct" id="rf-prog-pct">0%</span>
+              <button type="button" class="rf-cancel" id="rf-cancel">Cancel</button>
             </div>
-            <div class="sp-prog-bar" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-prog-fill"></i></div>
+            <div class="rf-prog-bar" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="rf-prog-fill"></i></div>
           </div>
         </div>
-        <div class="sp-xp-3d" id="sp-xp-3d" role="group" aria-label="3D model">
-          <div class="sp-row sp-row--video" id="sp-xp-glb-wrap">
-            <button type="button" class="sp-row-hit" id="sp-xp-glb" title="Shift-click for a finer mesh">
-              <span class="sp-row-t">GLB</span>
-              <span class="sp-row-s" id="sp-xp-glb-s">Blender · three.js</span>
+        <div class="rf-xp-3d" id="rf-xp-3d" role="group" aria-label="3D model">
+          <div class="rf-row rf-row--video" id="rf-xp-glb-wrap">
+            <button type="button" class="rf-row-hit" id="rf-xp-glb" title="Shift-click for a finer mesh">
+              <span class="rf-row-t">GLB</span>
+              <span class="rf-row-s" id="rf-xp-glb-s">Blender · three.js</span>
             </button>
           </div>
-          <div class="sp-row sp-row--video" id="sp-xp-stl-wrap">
-            <button type="button" class="sp-row-hit" id="sp-xp-stl" title="Shift-click for a finer mesh">
-              <span class="sp-row-t">STL</span>
-              <span class="sp-row-s" id="sp-xp-stl-s">3D print</span>
+          <div class="rf-row rf-row--video" id="rf-xp-stl-wrap">
+            <button type="button" class="rf-row-hit" id="rf-xp-stl" title="Shift-click for a finer mesh">
+              <span class="rf-row-t">STL</span>
+              <span class="rf-row-s" id="rf-xp-stl-s">3D print</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div class="sp-pill" id="sp-pill" role="toolbar" aria-label="Spectra controls">
+      <div class="rf-pill" id="rf-pill" role="toolbar" aria-label="Refract controls">
         <!-- Glass/Chrome switch removed for now (engine still supports chrome) -->
-        <button type="button" class="sp-btn" id="sp-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-light">Light</button>
-        <button type="button" class="sp-btn" id="sp-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-logo">Logo</button>
-        <button type="button" class="sp-btn" id="sp-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-export">Export</button>
+        <button type="button" class="rf-btn" id="rf-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-light">Light</button>
+        <button type="button" class="rf-btn" id="rf-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-logo">Logo</button>
+        <button type="button" class="rf-btn" id="rf-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-export">Export</button>
       </div>
     </div>
   </div>
 
-  <div class="sp-dropzone" id="sp-dropzone" aria-hidden="true"><span>Drop to use as your prism</span></div>
+  <div class="rf-dropzone" id="rf-dropzone" aria-hidden="true"><span>Drop to use as your prism</span></div>
 </div>

@@ -3,405 +3,398 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Spectra</title>
+<title>Refract</title>
 <meta name="description" content="Turn any SVG logo into spectral glass or chrome, rendered live with WebGL2.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Spectra v2 — the render is the page. Chrome is a single smoked-glass pill. */
+/* Refract v2 — the render is the page. Chrome is a single smoked-glass pill. */
 :root {
-  --sp-void: #141416;
-  --sp-ink: #f3f3f5;
-  --sp-ink-2: rgba(243, 243, 245, 0.62);
-  --sp-ink-3: rgba(243, 243, 245, 0.38);
-  --sp-ink-4: rgba(243, 243, 245, 0.18);
-  --sp-line: rgba(255, 255, 255, 0.085);
-  --sp-line-2: rgba(255, 255, 255, 0.15);
-  --sp-glass: rgba(14, 14, 16, 0.52);
-  --sp-glass-pop: rgba(16, 16, 19, 0.7);
-  --sp-fill: rgba(255, 255, 255, 0.075);
-  --sp-fill-2: rgba(255, 255, 255, 0.11);
-  --sp-spectrum: linear-gradient(90deg, #ff4040, #ff9a1f 18%, #ffe44d 34%, #42e38c 50%, #2ad4f5 66%, #4f6cff 82%, #a35cff);
-  --sp-font: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --sp-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --sp-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --sp-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
-  --sp-blur: blur(24px) saturate(160%);
-  --sp-h: 44px;
-  --sp-edge: 24px;
-  --sp-safe-b: max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+  --rf-void: #141416;
+  --rf-ink: #f3f3f5;
+  --rf-ink-2: rgba(243, 243, 245, 0.62);
+  --rf-ink-3: rgba(243, 243, 245, 0.38);
+  --rf-ink-4: rgba(243, 243, 245, 0.18);
+  --rf-line: rgba(255, 255, 255, 0.085);
+  --rf-line-2: rgba(255, 255, 255, 0.15);
+  --rf-glass: rgba(14, 14, 16, 0.52);
+  --rf-glass-pop: rgba(16, 16, 19, 0.7);
+  --rf-fill: rgba(255, 255, 255, 0.075);
+  --rf-fill-2: rgba(255, 255, 255, 0.11);
+  --rf-spectrum: linear-gradient(90deg, #ff4040, #ff9a1f 18%, #ffe44d 34%, #42e38c 50%, #2ad4f5 66%, #4f6cff 82%, #a35cff);
+  --rf-font: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --rf-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --rf-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --rf-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --rf-blur: blur(24px) saturate(160%);
+  --rf-h: 44px;
+  --rf-edge: 24px;
+  --rf-safe-b: max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
 }
 
-html, body { margin: 0; height: 100%; background: var(--sp-void); overflow: hidden; }
-.sp-root {
-  position: fixed; inset: 0; background: var(--sp-void); color: var(--sp-ink);
-  font: 400 13px/1.3 var(--sp-font); letter-spacing: 0.005em;
+html, body { margin: 0; height: 100%; background: var(--rf-void); overflow: hidden; }
+.rf-root {
+  position: fixed; inset: 0; background: var(--rf-void); color: var(--rf-ink);
+  font: 400 13px/1.3 var(--rf-font); letter-spacing: 0.005em;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none;
   -webkit-tap-highlight-color: transparent;
 }
-.sp-root *, .sp-root *::before, .sp-root *::after { box-sizing: border-box; }
-#spectra-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
-:where(.sp-root) :where(button) { font: inherit; color: inherit; letter-spacing: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-user-select: none; user-select: none; }
-:where(.sp-root) :where(button):focus { outline: none; }
-.sp-root [hidden]:not(.sp-pop) { display: none !important; }
-.sp-root :focus-visible { outline: 1.5px solid rgba(255, 255, 255, 0.85); outline-offset: 2px; }
-.sp-pill :focus-visible, .sp-pop :focus-visible { outline-offset: -1.5px; }
+.rf-root *, .rf-root *::before, .rf-root *::after { box-sizing: border-box; }
+#refract-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+:where(.rf-root) :where(button) { font: inherit; color: inherit; letter-spacing: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-user-select: none; user-select: none; }
+:where(.rf-root) :where(button):focus { outline: none; }
+.rf-root [hidden]:not(.rf-pop) { display: none !important; }
+.rf-root :focus-visible { outline: 1.5px solid rgba(255, 255, 255, 0.85); outline-offset: 2px; }
+.rf-pill :focus-visible, .rf-pop :focus-visible { outline-offset: -1.5px; }
 
 /* ───── UI layer (H hides) ───── */
-.sp-ui { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 600ms var(--sp-ease); }
-.sp-ui.is-in { opacity: 1; }
-.sp-ui.is-hidden { opacity: 0 !important; visibility: hidden; transition: opacity 240ms var(--sp-ease), visibility 0s 240ms; }
-.sp-ui > * { pointer-events: auto; }
+.rf-ui { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 600ms var(--rf-ease); }
+.rf-ui.is-in { opacity: 1; }
+.rf-ui.is-hidden { opacity: 0 !important; visibility: hidden; transition: opacity 240ms var(--rf-ease), visibility 0s 240ms; }
+.rf-ui > * { pointer-events: auto; }
 
 /* ───── wordmark ───── */
-.sp-mark {
-  position: absolute; top: max(22px, calc(env(safe-area-inset-top, 0px) + 14px)); left: max(var(--sp-edge), calc(env(safe-area-inset-left, 0px) + 16px));
+.rf-mark {
+  position: absolute; top: max(22px, calc(env(safe-area-inset-top, 0px) + 14px)); left: max(var(--rf-edge), calc(env(safe-area-inset-left, 0px) + 16px));
   display: flex; align-items: center; gap: 8px; pointer-events: none;
-  font-size: 14px; font-weight: 550; letter-spacing: -0.012em; color: var(--sp-ink);
+  font-size: 14px; font-weight: 550; letter-spacing: -0.012em; color: var(--rf-ink);
 }
-.sp-mark-glyph { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; opacity: 0.9; }
+.rf-mark-glyph { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; opacity: 0.9; }
 
 /* ───── hint ───── */
-.sp-hint {
-  position: absolute; margin: 0; left: max(var(--sp-edge), calc(env(safe-area-inset-left, 0px) + 16px)); bottom: calc(var(--sp-safe-b) + 14px);
-  font-size: 11px; letter-spacing: 0.06em; color: var(--sp-ink-3); pointer-events: none;
-  transition: opacity 900ms var(--sp-ease), transform 900ms var(--sp-ease);
+.rf-hint {
+  position: absolute; margin: 0; left: max(var(--rf-edge), calc(env(safe-area-inset-left, 0px) + 16px)); bottom: calc(var(--rf-safe-b) + 14px);
+  font-size: 11px; letter-spacing: 0.06em; color: var(--rf-ink-3); pointer-events: none;
+  transition: opacity 900ms var(--rf-ease), transform 900ms var(--rf-ease);
 }
-.sp-hint.is-gone, .sp-ui.has-pop .sp-hint { opacity: 0; transform: translateY(4px); transition-duration: 300ms; }
-.sp-hint-touch { display: none; }
-@media (hover: none) and (pointer: coarse) { .sp-hint-fine { display: none; } .sp-hint-touch { display: inline; } }
+.rf-hint.is-gone, .rf-ui.has-pop .rf-hint { opacity: 0; transform: translateY(4px); transition-duration: 300ms; }
+.rf-hint-touch { display: none; }
+@media (hover: none) and (pointer: coarse) { .rf-hint-fine { display: none; } .rf-hint-touch { display: inline; } }
 
 /* ───── dock + pill ───── */
-.sp-dock {
-  position: absolute; left: 50%; bottom: var(--sp-safe-b); transform: translateX(-50%);
+.rf-dock {
+  position: absolute; left: 50%; bottom: var(--rf-safe-b); transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; pointer-events: none;
 }
-.sp-dock > * { pointer-events: auto; }
-.sp-pill {
-  position: relative; display: flex; align-items: center; height: var(--sp-h); padding: 4px; gap: 2px;
-  border-radius: 999px; background: var(--sp-glass);
-  -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur);
-  box-shadow: inset 0 0 0 1px var(--sp-line), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 40px -12px rgba(0, 0, 0, 0.8);
+.rf-dock > * { pointer-events: auto; }
+.rf-pill {
+  position: relative; display: flex; align-items: center; height: var(--rf-h); padding: 4px; gap: 2px;
+  border-radius: 999px; background: var(--rf-glass);
+  -webkit-backdrop-filter: var(--rf-blur); backdrop-filter: var(--rf-blur);
+  box-shadow: inset 0 0 0 1px var(--rf-line), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 40px -12px rgba(0, 0, 0, 0.8);
 }
-.sp-seg { position: relative; display: flex; height: 100%; isolation: isolate; }
-.sp-seg button, .sp-btn {
+.rf-seg { position: relative; display: flex; height: 100%; isolation: isolate; }
+.rf-seg button, .rf-btn {
   position: relative; height: 100%; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 500;
-  color: var(--sp-ink-2); transition: color 180ms var(--sp-ease), background-color 180ms var(--sp-ease);
+  color: var(--rf-ink-2); transition: color 180ms var(--rf-ease), background-color 180ms var(--rf-ease);
 }
-.sp-seg button { z-index: 1; min-width: 74px; }
-.sp-seg button[aria-checked="true"] { color: var(--sp-ink); }
-.sp-seg button:hover, .sp-btn:hover { color: var(--sp-ink); }
-.sp-btn:hover, .sp-btn[aria-expanded="true"] { background: var(--sp-fill); }
-.sp-btn[aria-expanded="true"] { color: var(--sp-ink); }
-.sp-seg-ind {
+.rf-seg button { z-index: 1; min-width: 74px; }
+.rf-seg button[aria-checked="true"] { color: var(--rf-ink); }
+.rf-seg button:hover, .rf-btn:hover { color: var(--rf-ink); }
+.rf-btn:hover, .rf-btn[aria-expanded="true"] { background: var(--rf-fill); }
+.rf-btn[aria-expanded="true"] { color: var(--rf-ink); }
+.rf-seg-ind {
   position: absolute; z-index: 0; top: 0; bottom: 0; left: 0; width: 74px; border-radius: 999px;
-  background: var(--sp-fill-2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  background: var(--rf-fill-2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   transform: translateX(var(--x, 0px)); width: var(--w, 74px);
-  transition: transform 220ms var(--sp-spring), width 220ms var(--sp-spring);
+  transition: transform 220ms var(--rf-spring), width 220ms var(--rf-spring);
 }
 /* the one spectral accent */
-.sp-seg-ind::after {
+.rf-seg-ind::after {
   content: ""; position: absolute; left: 14px; right: 14px; bottom: 5px; height: 1px; border-radius: 1px;
-  background: var(--sp-spectrum); opacity: 0.95;
+  background: var(--rf-spectrum); opacity: 0.95;
   -webkit-mask: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
   mask: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
 }
-.sp-seg.no-anim .sp-seg-ind { transition: none; }
-.sp-div { width: 1px; height: 18px; margin: 0 6px; background: var(--sp-line-2); flex: none; }
-.sp-btn.is-busy { color: var(--sp-ink); }
-.sp-btn.is-busy::after {
+.rf-seg.no-anim .rf-seg-ind { transition: none; }
+.rf-div { width: 1px; height: 18px; margin: 0 6px; background: var(--rf-line-2); flex: none; }
+.rf-btn.is-busy { color: var(--rf-ink); }
+.rf-btn.is-busy::after {
   content: ""; position: absolute; top: 9px; right: 7px; width: 4px; height: 4px; border-radius: 50%;
-  background: var(--sp-ink); animation: sp-pulse 900ms ease-in-out infinite alternate;
+  background: var(--rf-ink); animation: rf-pulse 900ms ease-in-out infinite alternate;
 }
-@keyframes sp-pulse { from { opacity: 0.25; } to { opacity: 1; } }
+@keyframes rf-pulse { from { opacity: 0.25; } to { opacity: 1; } }
 
 /* ───── popovers ───── */
-.sp-pop {
+.rf-pop {
   position: absolute; bottom: calc(100% + 10px); left: 0;
-  border-radius: 18px; padding: 8px; background: var(--sp-glass-pop);
-  -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur);
-  box-shadow: inset 0 0 0 1px var(--sp-line), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+  border-radius: 18px; padding: 8px; background: var(--rf-glass-pop);
+  -webkit-backdrop-filter: var(--rf-blur); backdrop-filter: var(--rf-blur);
+  box-shadow: inset 0 0 0 1px var(--rf-line), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 60px -20px rgba(0, 0, 0, 0.9);
   transform-origin: var(--ox, 50%) 100%;
   opacity: 0; transform: translateY(6px) scale(0.96);
-  transition: opacity 160ms var(--sp-ease), transform 220ms var(--sp-spring);
+  transition: opacity 160ms var(--rf-ease), transform 220ms var(--rf-spring);
 }
-.sp-pop.is-open { opacity: 1; transform: none; }
-.sp-pop[hidden] { display: block; visibility: hidden; pointer-events: none; }
-.sp-pop--logo { width: 300px; }
-.sp-pop--export { width: 248px; padding: 6px; }
+.rf-pop.is-open { opacity: 1; transform: none; }
+.rf-pop[hidden] { display: block; visibility: hidden; pointer-events: none; }
+.rf-pop--logo { width: 300px; }
+.rf-pop--export { width: 248px; padding: 6px; }
 
-.sp-drop {
+.rf-drop {
   width: 100%; display: grid; justify-items: center; gap: 4px; padding: 20px 12px 18px;
-  border-radius: 12px; box-shadow: inset 0 0 0 1px var(--sp-line); background: rgba(255, 255, 255, 0.02);
-  transition: background-color 160ms var(--sp-ease), box-shadow 160ms var(--sp-ease);
+  border-radius: 12px; box-shadow: inset 0 0 0 1px var(--rf-line); background: rgba(255, 255, 255, 0.02);
+  transition: background-color 160ms var(--rf-ease), box-shadow 160ms var(--rf-ease);
 }
-.sp-drop:hover { background: rgba(255, 255, 255, 0.045); box-shadow: inset 0 0 0 1px var(--sp-line-2); }
-.sp-drop svg { width: 16px; height: 16px; fill: none; stroke: var(--sp-ink-2); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 4px; }
-.sp-drop-t { font-size: 13px; font-weight: 500; color: var(--sp-ink); }
-.sp-drop-s { font-size: 11px; letter-spacing: 0.04em; color: var(--sp-ink-3); }
+.rf-drop:hover { background: rgba(255, 255, 255, 0.045); box-shadow: inset 0 0 0 1px var(--rf-line-2); }
+.rf-drop svg { width: 16px; height: 16px; fill: none; stroke: var(--rf-ink-2); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 4px; }
+.rf-drop-t { font-size: 13px; font-weight: 500; color: var(--rf-ink); }
+.rf-drop-s { font-size: 11px; letter-spacing: 0.04em; color: var(--rf-ink-3); }
 
-.sp-word { position: relative; margin: 8px 0 0; }
-.sp-word input {
+.rf-word { position: relative; margin: 8px 0 0; }
+.rf-word input {
   width: 100%; height: 40px; padding: 0 36px 0 14px; border: 0; border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--sp-line);
-  color: var(--sp-ink); font: 500 13px var(--sp-font); letter-spacing: 0.005em; outline: none;
-  transition: box-shadow 160ms var(--sp-ease), background-color 160ms var(--sp-ease);
+  background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--rf-line);
+  color: var(--rf-ink); font: 500 13px var(--rf-font); letter-spacing: 0.005em; outline: none;
+  transition: box-shadow 160ms var(--rf-ease), background-color 160ms var(--rf-ease);
 }
-.sp-word input::placeholder { color: var(--sp-ink-3); }
-.sp-word input:focus { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32); background: rgba(255, 255, 255, 0.06); }
-.sp-word kbd {
+.rf-word input::placeholder { color: var(--rf-ink-3); }
+.rf-word input:focus { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32); background: rgba(255, 255, 255, 0.06); }
+.rf-word kbd {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%); min-width: 22px; height: 22px;
-  display: grid; place-items: center; border-radius: 6px; font: 400 11px var(--sp-mono); color: var(--sp-ink-3);
-  box-shadow: inset 0 0 0 1px var(--sp-line); pointer-events: none;
+  display: grid; place-items: center; border-radius: 6px; font: 400 11px var(--rf-mono); color: var(--rf-ink-3);
+  box-shadow: inset 0 0 0 1px var(--rf-line); pointer-events: none;
 }
 
-.sp-samples { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 8px; }
-.sp-smp {
+.rf-samples { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 8px; }
+.rf-smp {
   aspect-ratio: 1; display: grid; place-items: center; border-radius: 10px;
-  transition: background-color 160ms var(--sp-ease), box-shadow 160ms var(--sp-ease);
+  transition: background-color 160ms var(--rf-ease), box-shadow 160ms var(--rf-ease);
 }
-.sp-smp img { width: 52%; height: 52%; max-width: 22px; max-height: 22px; opacity: 0.6; transition: opacity 160ms var(--sp-ease), transform 220ms var(--sp-spring); }
-.sp-smp:hover { background: var(--sp-fill); }
-.sp-smp:hover img { opacity: 1; }
-.sp-smp:active img { transform: scale(0.92); }
-.sp-smp[aria-pressed="true"] { background: var(--sp-fill); box-shadow: inset 0 0 0 1px var(--sp-line-2); }
-.sp-smp[aria-pressed="true"] img { opacity: 1; }
-.sp-smp.is-busy img { animation: sp-pulse 700ms ease-in-out infinite alternate; }
+.rf-smp img { width: 52%; height: 52%; max-width: 22px; max-height: 22px; opacity: 0.6; transition: opacity 160ms var(--rf-ease), transform 220ms var(--rf-spring); }
+.rf-smp:hover { background: var(--rf-fill); }
+.rf-smp:hover img { opacity: 1; }
+.rf-smp:active img { transform: scale(0.92); }
+.rf-smp[aria-pressed="true"] { background: var(--rf-fill); box-shadow: inset 0 0 0 1px var(--rf-line-2); }
+.rf-smp[aria-pressed="true"] img { opacity: 1; }
+.rf-smp.is-busy img { animation: rf-pulse 700ms ease-in-out infinite alternate; }
 
 /* export rows */
-.sp-row, .sp-row-hit {
+.rf-row, .rf-row-hit {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   min-height: 44px; padding: 0 12px; border-radius: 12px; text-align: left;
 }
-.sp-row--video { padding: 0; display: block; }
-button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
-.sp-row-t { font-size: 13px; font-weight: 500; color: var(--sp-ink); }
-.sp-row-s { font: 400 11px var(--sp-mono); letter-spacing: 0.02em; color: var(--sp-ink-3); font-variant-numeric: tabular-nums; }
-.sp-root button:disabled { cursor: default; opacity: 0.4; }
-.sp-root button.sp-row:disabled:hover, .sp-row-hit:disabled:hover { background: none; }
+.rf-row--video { padding: 0; display: block; }
+button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
+.rf-row-t { font-size: 13px; font-weight: 500; color: var(--rf-ink); }
+.rf-row-s { font: 400 11px var(--rf-mono); letter-spacing: 0.02em; color: var(--rf-ink-3); font-variant-numeric: tabular-nums; }
+.rf-root button:disabled { cursor: default; opacity: 0.4; }
+.rf-root button.rf-row:disabled:hover, .rf-row-hit:disabled:hover { background: none; }
 
 /* 3D model rows: same rows, set off from image/video by a hairline */
-.sp-xp-3d { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--sp-line-2); }
-.sp-xp-3d[hidden] { display: none; }
-.sp-prog { padding: 10px 12px 12px; }
-.sp-prog[hidden] { display: none; }
-.sp-prog-top { display: flex; align-items: center; gap: 10px; }
-.sp-prog-top .sp-row-t { flex: 1; }
-.sp-prog-pct { font: 400 11px var(--sp-mono); color: var(--sp-ink-2); font-variant-numeric: tabular-nums; min-width: 3.5ch; text-align: right; }
-.sp-cancel { font-size: 12px; color: var(--sp-ink-2); padding: 5px 9px; margin-right: -6px; border-radius: 8px; }
-.sp-cancel:hover { color: var(--sp-ink); background: var(--sp-fill); }
-.sp-prog-bar { position: relative; height: 1px; margin-top: 10px; background: var(--sp-ink-4); overflow: hidden; }
-.sp-prog-bar i { position: absolute; inset: 0; background: var(--sp-ink); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); transition: transform 200ms linear; }
+.rf-xp-3d { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--rf-line-2); }
+.rf-xp-3d[hidden] { display: none; }
+.rf-prog { padding: 10px 12px 12px; }
+.rf-prog[hidden] { display: none; }
+.rf-prog-top { display: flex; align-items: center; gap: 10px; }
+.rf-prog-top .rf-row-t { flex: 1; }
+.rf-prog-pct { font: 400 11px var(--rf-mono); color: var(--rf-ink-2); font-variant-numeric: tabular-nums; min-width: 3.5ch; text-align: right; }
+.rf-cancel { font-size: 12px; color: var(--rf-ink-2); padding: 5px 9px; margin-right: -6px; border-radius: 8px; }
+.rf-cancel:hover { color: var(--rf-ink); background: var(--rf-fill); }
+.rf-prog-bar { position: relative; height: 1px; margin-top: 10px; background: var(--rf-ink-4); overflow: hidden; }
+.rf-prog-bar i { position: absolute; inset: 0; background: var(--rf-ink); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); transition: transform 200ms linear; }
 
 /* ───── toast ───── */
-.sp-toast {
+.rf-toast {
   position: absolute; bottom: calc(100% + 14px); left: 50%; white-space: nowrap; pointer-events: none;
-  font-size: 12px; letter-spacing: 0.01em; color: var(--sp-ink-2);
+  font-size: 12px; letter-spacing: 0.01em; color: var(--rf-ink-2);
   padding: 6px 12px; border-radius: 999px; background: rgba(10, 10, 12, 0.45);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  opacity: 0; transform: translate(-50%, 4px); transition: opacity 200ms var(--sp-ease), transform 260ms var(--sp-ease), bottom 220ms var(--sp-ease);
+  opacity: 0; transform: translate(-50%, 4px); transition: opacity 200ms var(--rf-ease), transform 260ms var(--rf-ease), bottom 220ms var(--rf-ease);
 }
-.sp-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
-.sp-toast.is-err { color: #ffb4ab; }
+.rf-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.rf-toast.is-err { color: #ffb4ab; }
 
 /* ───── drop frame ───── */
-.sp-dropzone {
+.rf-dropzone {
   position: absolute; inset: 12px; border-radius: 20px; pointer-events: none;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42); background: rgba(0, 0, 0, 0.6);
   display: grid; place-items: center; opacity: 0; transform: scale(1.01);
-  transition: opacity 180ms var(--sp-ease), transform 260ms var(--sp-ease);
+  transition: opacity 180ms var(--rf-ease), transform 260ms var(--rf-ease);
 }
-.sp-dropzone span { font-size: 13px; font-weight: 500; letter-spacing: 0.02em; color: var(--sp-ink); }
-.sp-dropzone.is-on { opacity: 1; transform: none; }
+.rf-dropzone span { font-size: 13px; font-weight: 500; letter-spacing: 0.02em; color: var(--rf-ink); }
+.rf-dropzone.is-on { opacity: 1; transform: none; }
 
 /* ───── narrow ───── */
 @media (max-width: 560px) {
-  :root { --sp-edge: 18px; }
-  .sp-dock { left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); transform: none; }
-  .sp-pill { width: 100%; max-width: 440px; }
-  .sp-seg { flex: 2; }
-  .sp-seg button { flex: 1; min-width: 0; padding: 0 10px; }
-  .sp-btn { flex: 1; padding: 0 10px; }
-  .sp-pop { left: 0 !important; right: 0; width: auto; margin: 0 auto; max-width: 440px; }
-  .sp-hint { left: 50%; transform: translateX(-50%); bottom: calc(var(--sp-safe-b) + var(--sp-h) + 18px); white-space: nowrap; }
-  .sp-hint.is-gone, .sp-ui.has-pop .sp-hint { transform: translate(-50%, 4px); }
+  :root { --rf-edge: 18px; }
+  .rf-dock { left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); transform: none; }
+  .rf-pill { width: 100%; max-width: 440px; }
+  .rf-seg { flex: 2; }
+  .rf-seg button { flex: 1; min-width: 0; padding: 0 10px; }
+  .rf-btn { flex: 1; padding: 0 10px; }
+  .rf-pop { left: 0 !important; right: 0; width: auto; margin: 0 auto; max-width: 440px; }
+  .rf-hint { left: 50%; transform: translateX(-50%); bottom: calc(var(--rf-safe-b) + var(--rf-h) + 18px); white-space: nowrap; }
+  .rf-hint.is-gone, .rf-ui.has-pop .rf-hint { transform: translate(-50%, 4px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sp-root *, .sp-root *::before, .sp-root *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
-  .sp-pop { transform: none; }
+  .rf-root *, .rf-root *::before, .rf-root *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+  .rf-pop { transform: none; }
 }
 
-#spectra-canvas { cursor: grab; }
-#spectra-canvas.is-dragging { cursor: grabbing; }
+#refract-canvas { cursor: grab; }
+#refract-canvas.is-dragging { cursor: grabbing; }
 
 /* ───── Light popover ───── */
-.sp-pop--light { width: 236px; padding: 10px; }
-.sp-pop-label { margin: 2px 4px 7px; font: 500 10px var(--sp-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--sp-ink-3); }
-.sp-pop-label + .sp-opts { margin-bottom: 12px; }
-.sp-opts:last-child { margin-bottom: 0 !important; }
-.sp-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.sp-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 10px; border: 1px solid var(--sp-line); background: transparent; transition: background .18s var(--sp-ease), border-color .18s var(--sp-ease); }
-.sp-opt:hover { background: var(--sp-fill); }
-.sp-opt[aria-checked="true"] { border-color: var(--sp-line-2); background: var(--sp-fill-2); }
-.sp-opt-ico { width: 100%; height: 28px; border-radius: 6px; position: relative; overflow: hidden; background: #050506; box-shadow: inset 0 0 0 1px var(--sp-line); }
-.sp-ico-beam::before { content: ""; position: absolute; left: -4px; top: 13px; width: 48%; height: 2px; background: #fff; transform: rotate(-6deg); box-shadow: 0 0 6px rgba(255,255,255,.7); }
-.sp-ico-beam::after { content: ""; position: absolute; left: 46%; top: 6px; width: 60%; height: 18px; background: var(--sp-spectrum); clip-path: polygon(0 45%, 100% 0, 100% 100%, 0 58%); opacity: .9; }
-.sp-ico-studio { background: radial-gradient(60% 90% at 30% 0%, rgba(255,255,255,.55), transparent 70%), radial-gradient(40% 80% at 85% 100%, rgba(255,255,255,.22), transparent 70%), #08080a; }
-.sp-ico-dark { background: radial-gradient(70% 90% at 50% 50%, #1a1a1d, #030304); }
-.sp-ico-light { background: radial-gradient(70% 90% at 50% 40%, #f4f2ee, #d9d6d0); }
+.rf-pop--light { width: 236px; padding: 10px; }
+.rf-pop-label { margin: 2px 4px 7px; font: 500 10px var(--rf-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--rf-ink-3); }
+.rf-pop-label + .rf-opts { margin-bottom: 12px; }
+.rf-opts:last-child { margin-bottom: 0 !important; }
+.rf-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rf-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 10px; border: 1px solid var(--rf-line); background: transparent; transition: background .18s var(--rf-ease), border-color .18s var(--rf-ease); }
+.rf-opt:hover { background: var(--rf-fill); }
+.rf-opt[aria-checked="true"] { border-color: var(--rf-line-2); background: var(--rf-fill-2); }
+.rf-opt-ico { width: 100%; height: 28px; border-radius: 6px; position: relative; overflow: hidden; background: #050506; box-shadow: inset 0 0 0 1px var(--rf-line); }
+.rf-ico-beam::before { content: ""; position: absolute; left: -4px; top: 13px; width: 48%; height: 2px; background: #fff; transform: rotate(-6deg); box-shadow: 0 0 6px rgba(255,255,255,.7); }
+.rf-ico-beam::after { content: ""; position: absolute; left: 46%; top: 6px; width: 60%; height: 18px; background: var(--rf-spectrum); clip-path: polygon(0 45%, 100% 0, 100% 100%, 0 58%); opacity: .9; }
+.rf-ico-studio { background: radial-gradient(60% 90% at 30% 0%, rgba(255,255,255,.55), transparent 70%), radial-gradient(40% 80% at 85% 100%, rgba(255,255,255,.22), transparent 70%), #08080a; }
+.rf-ico-dark { background: radial-gradient(70% 90% at 50% 50%, #1a1a1d, #030304); }
+.rf-ico-light { background: radial-gradient(70% 90% at 50% 40%, #f4f2ee, #d9d6d0); }
 
 /* ───── Light theme skin ───── */
-.sp-root.is-light {
-  --sp-void: #dcd8d1; --sp-ink: #17171a; --sp-ink-2: rgba(23,23,26,.62); --sp-ink-3: rgba(23,23,26,.45); --sp-ink-4: rgba(23,23,26,.2);
-  --sp-line: rgba(0,0,0,.08); --sp-line-2: rgba(0,0,0,.16); --sp-glass: rgba(250,249,247,.6); --sp-glass-pop: rgba(250,249,247,.82);
-  --sp-fill: rgba(0,0,0,.045); --sp-fill-2: rgba(0,0,0,.075);
+.rf-root.is-light {
+  --rf-void: #dcd8d1; --rf-ink: #17171a; --rf-ink-2: rgba(23,23,26,.62); --rf-ink-3: rgba(23,23,26,.45); --rf-ink-4: rgba(23,23,26,.2);
+  --rf-line: rgba(0,0,0,.08); --rf-line-2: rgba(0,0,0,.16); --rf-glass: rgba(250,249,247,.6); --rf-glass-pop: rgba(250,249,247,.82);
+  --rf-fill: rgba(0,0,0,.045); --rf-fill-2: rgba(0,0,0,.075);
 }
-.sp-root.is-light :focus-visible { outline-color: rgba(0,0,0,.75); }
-.sp-root.is-light .sp-mark-glyph { stroke: currentColor; }
+.rf-root.is-light :focus-visible { outline-color: rgba(0,0,0,.75); }
+.rf-root.is-light .rf-mark-glyph { stroke: currentColor; }
 
 /* ───── shape sliders (inside the Logo popover) ───── */
-.sp-sliders { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--sp-line); }
-.sp-sl { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 8px; cursor: pointer; }
-.sp-sl-t { font-size: 12px; color: var(--sp-ink-2); }
-.sp-sl-v { font: 400 11px var(--sp-mono); color: var(--sp-ink-3); font-variant-numeric: tabular-nums; }
-.sp-sl input[type="range"] { grid-column: 1 / -1; -webkit-appearance: none; appearance: none; width: 100%; height: 18px; margin: 0; background: transparent; cursor: pointer; }
-.sp-sl input[type="range"]::-webkit-slider-runnable-track { height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--sp-ink-2) var(--p, 50%), var(--sp-ink-4) var(--p, 50%)); }
-.sp-sl input[type="range"]::-moz-range-track { height: 2px; border-radius: 2px; background: var(--sp-ink-4); }
-.sp-sl input[type="range"]::-moz-range-progress { height: 2px; background: var(--sp-ink-2); }
-.sp-sl input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%; background: var(--sp-ink); box-shadow: 0 0 0 4px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.4); transition: transform .15s var(--sp-ease); }
-.sp-sl input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--sp-ink); }
-.sp-sl input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
-.sp-sl input[type="range"]:focus-visible { outline: none; }
-.sp-sl input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--sp-ink-3); }
-.sp-root.is-light .sp-sl input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.25); }
+.rf-sliders { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rf-line); }
+.rf-sl { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 8px; cursor: pointer; }
+.rf-sl-t { font-size: 12px; color: var(--rf-ink-2); }
+.rf-sl-v { font: 400 11px var(--rf-mono); color: var(--rf-ink-3); font-variant-numeric: tabular-nums; }
+.rf-sl input[type="range"] { grid-column: 1 / -1; -webkit-appearance: none; appearance: none; width: 100%; height: 18px; margin: 0; background: transparent; cursor: pointer; }
+.rf-sl input[type="range"]::-webkit-slider-runnable-track { height: 2px; border-radius: 2px; background: linear-gradient(90deg, var(--rf-ink-2) var(--p, 50%), var(--rf-ink-4) var(--p, 50%)); }
+.rf-sl input[type="range"]::-moz-range-track { height: 2px; border-radius: 2px; background: var(--rf-ink-4); }
+.rf-sl input[type="range"]::-moz-range-progress { height: 2px; background: var(--rf-ink-2); }
+.rf-sl input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%; background: var(--rf-ink); box-shadow: 0 0 0 4px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.4); transition: transform .15s var(--rf-ease); }
+.rf-sl input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--rf-ink); }
+.rf-sl input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); }
+.rf-sl input[type="range"]:focus-visible { outline: none; }
+.rf-sl input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--rf-ink-3); }
+.rf-root.is-light .rf-sl input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.25); }
 
-.spectra-fatal{position:fixed;inset:auto 16px 16px 16px;margin:auto;max-width:420px;padding:16px 18px;border-radius:12px;background:#111214;color:#e8e8ea;border:1px solid rgba(255,255,255,.12);font:13px/1.5 system-ui,sans-serif;display:grid;gap:4px;z-index:9999}
+.refract-fatal{position:fixed;inset:auto 16px 16px 16px;margin:auto;max-width:420px;padding:16px 18px;border-radius:12px;background:#111214;color:#e8e8ea;border:1px solid rgba(255,255,255,.12);font:13px/1.5 system-ui,sans-serif;display:grid;gap:4px;z-index:9999}
 </style>
 </head>
 <body>
 
-<div id="sp-root" class="sp-root">
-  <canvas id="spectra-canvas" aria-label="Spectra render. Move the pointer to steer the light, drag to spin the logo."></canvas>
+<div id="rf-root" class="rf-root">
+  <canvas id="refract-canvas" aria-label="Refract render. Move the pointer to steer the light, drag to spin the logo."></canvas>
 
-  <div class="sp-ui" id="sp-ui">
-    <div class="sp-mark" aria-label="Spectra">
-      <svg class="sp-mark-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6L13.9 13H2.1z"/></svg>
-      <span>Spectra</span>
+  <div class="rf-ui" id="rf-ui">
+    <div class="rf-mark" aria-label="Refract">
+      <svg class="rf-mark-glyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.6L13.9 13H2.1z"/></svg>
+      <span>Refract</span>
     </div>
 
-    <p class="sp-hint" id="sp-hint" aria-hidden="true"><span class="sp-hint-fine">Move to steer the light · Drag to spin</span><span class="sp-hint-touch">Drag to spin · Tap to aim the light</span></p>
+    <p class="rf-hint" id="rf-hint" aria-hidden="true"><span class="rf-hint-fine">Move to steer the light · Drag to spin</span><span class="rf-hint-touch">Drag to spin · Tap to aim the light</span></p>
 
-    <div class="sp-dock" id="sp-dock">
-      <div class="sp-toast" id="sp-toast" role="status" aria-live="polite"></div>
+    <div class="rf-dock" id="rf-dock">
+      <div class="rf-toast" id="rf-toast" role="status" aria-live="polite"></div>
 
       <!-- Logo popover -->
-      <div class="sp-pop sp-pop--logo" id="sp-pop-logo" role="dialog" aria-label="Choose a logo" hidden>
-        <button type="button" class="sp-drop" id="sp-pick">
+      <div class="rf-pop rf-pop--logo" id="rf-pop-logo" role="dialog" aria-label="Choose a logo" hidden>
+        <button type="button" class="rf-drop" id="rf-pick">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5V3M5 6l3-3 3 3M3 10.5v1.75c0 .7.55 1.25 1.25 1.25h7.5c.7 0 1.25-.55 1.25-1.25V10.5"/></svg>
-          <span class="sp-drop-t">Drop an SVG or PNG</span>
-          <span class="sp-drop-s">or click to browse</span>
+          <span class="rf-drop-t">Drop an SVG or PNG</span>
+          <span class="rf-drop-s">or click to browse</span>
         </button>
-        <form class="sp-word" id="sp-word" autocomplete="off">
-          <input id="sp-word-in" type="text" maxlength="24" spellcheck="false" placeholder="or type a word" aria-label="Type a word to use as the prism" enterkeyhint="go">
+        <form class="rf-word" id="rf-word" autocomplete="off">
+          <input id="rf-word-in" type="text" maxlength="24" spellcheck="false" placeholder="or type a word" aria-label="Type a word to use as the prism" enterkeyhint="go">
           <kbd aria-hidden="true">↵</kbd>
         </form>
-        <div class="sp-samples" id="sp-samples" role="group" aria-label="Sample marks"></div>
-        <div class="sp-sliders" role="group" aria-label="Shape">
-          <label class="sp-sl" for="sp-thick"><span class="sp-sl-t">Thickness</span><span class="sp-sl-v" id="sp-thick-v">50</span>
-            <input id="sp-thick" type="range" min="0" max="100" step="1" value="50"></label>
-          <label class="sp-sl" for="sp-round"><span class="sp-sl-t">Roundness</span><span class="sp-sl-v" id="sp-round-v">65</span>
-            <input id="sp-round" type="range" min="0" max="100" step="1" value="65"></label>
+        <div class="rf-samples" id="rf-samples" role="group" aria-label="Sample marks"></div>
+        <div class="rf-sliders" role="group" aria-label="Shape">
+          <label class="rf-sl" for="rf-thick"><span class="rf-sl-t">Thickness</span><span class="rf-sl-v" id="rf-thick-v">50</span>
+            <input id="rf-thick" type="range" min="0" max="100" step="1" value="50"></label>
+          <label class="rf-sl" for="rf-round"><span class="rf-sl-t">Roundness</span><span class="rf-sl-v" id="rf-round-v">65</span>
+            <input id="rf-round" type="range" min="0" max="100" step="1" value="65"></label>
         </div>
-        <input id="sp-file" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden>
+        <input id="rf-file" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden>
       </div>
 
       <!-- Light popover -->
-      <div class="sp-pop sp-pop--light" id="sp-pop-light" role="dialog" aria-label="Lighting" hidden>
-        <p class="sp-pop-label">Light</p>
-        <div class="sp-opts" role="radiogroup" aria-label="Light">
-          <button type="button" class="sp-opt" role="radio" aria-checked="true" data-light="beam"><span class="sp-opt-ico sp-ico-beam" aria-hidden="true"></span><span class="sp-row-t">Beam</span></button>
-          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-light="studio"><span class="sp-opt-ico sp-ico-studio" aria-hidden="true"></span><span class="sp-row-t">Studio</span></button>
+      <div class="rf-pop rf-pop--light" id="rf-pop-light" role="dialog" aria-label="Lighting" hidden>
+        <p class="rf-pop-label">Light</p>
+        <div class="rf-opts" role="radiogroup" aria-label="Light">
+          <button type="button" class="rf-opt" role="radio" aria-checked="true" data-light="beam"><span class="rf-opt-ico rf-ico-beam" aria-hidden="true"></span><span class="rf-row-t">Beam</span></button>
+          <button type="button" class="rf-opt" role="radio" aria-checked="false" data-light="studio"><span class="rf-opt-ico rf-ico-studio" aria-hidden="true"></span><span class="rf-row-t">Studio</span></button>
         </div>
         <!-- Dark/Light background removed for now: always the light background -->
       </div>
 
       <!-- Export popover -->
-      <div class="sp-pop sp-pop--export" id="sp-pop-export" role="dialog" aria-label="Export" hidden>
-        <button type="button" class="sp-row" id="sp-xp-png">
-          <span class="sp-row-t">PNG</span>
-          <span class="sp-row-s" id="sp-xp-png-s">2×</span>
+      <div class="rf-pop rf-pop--export" id="rf-pop-export" role="dialog" aria-label="Export" hidden>
+        <button type="button" class="rf-row" id="rf-xp-png">
+          <span class="rf-row-t">PNG</span>
+          <span class="rf-row-s" id="rf-xp-png-s">2×</span>
         </button>
-        <div class="sp-row sp-row--video" id="sp-xp-mp4-wrap">
-          <button type="button" class="sp-row-hit" id="sp-xp-mp4">
-            <span class="sp-row-t">MP4 loop</span>
-            <span class="sp-row-s" id="sp-xp-mp4-s">6 s</span>
+        <div class="rf-row rf-row--video" id="rf-xp-mp4-wrap">
+          <button type="button" class="rf-row-hit" id="rf-xp-mp4">
+            <span class="rf-row-t">MP4 loop</span>
+            <span class="rf-row-s" id="rf-xp-mp4-s">6 s</span>
           </button>
-          <div class="sp-prog" id="sp-prog" hidden>
-            <div class="sp-prog-top">
-              <span class="sp-row-t" id="sp-prog-label">Rendering</span>
-              <span class="sp-prog-pct" id="sp-prog-pct">0%</span>
-              <button type="button" class="sp-cancel" id="sp-cancel">Cancel</button>
+          <div class="rf-prog" id="rf-prog" hidden>
+            <div class="rf-prog-top">
+              <span class="rf-row-t" id="rf-prog-label">Rendering</span>
+              <span class="rf-prog-pct" id="rf-prog-pct">0%</span>
+              <button type="button" class="rf-cancel" id="rf-cancel">Cancel</button>
             </div>
-            <div class="sp-prog-bar" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-prog-fill"></i></div>
+            <div class="rf-prog-bar" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="rf-prog-fill"></i></div>
           </div>
         </div>
-        <div class="sp-xp-3d" id="sp-xp-3d" role="group" aria-label="3D model">
-          <div class="sp-row sp-row--video" id="sp-xp-glb-wrap">
-            <button type="button" class="sp-row-hit" id="sp-xp-glb" title="Shift-click for a finer mesh">
-              <span class="sp-row-t">GLB</span>
-              <span class="sp-row-s" id="sp-xp-glb-s">Blender · three.js</span>
+        <div class="rf-xp-3d" id="rf-xp-3d" role="group" aria-label="3D model">
+          <div class="rf-row rf-row--video" id="rf-xp-glb-wrap">
+            <button type="button" class="rf-row-hit" id="rf-xp-glb" title="Shift-click for a finer mesh">
+              <span class="rf-row-t">GLB</span>
+              <span class="rf-row-s" id="rf-xp-glb-s">Blender · three.js</span>
             </button>
           </div>
-          <div class="sp-row sp-row--video" id="sp-xp-stl-wrap">
-            <button type="button" class="sp-row-hit" id="sp-xp-stl" title="Shift-click for a finer mesh">
-              <span class="sp-row-t">STL</span>
-              <span class="sp-row-s" id="sp-xp-stl-s">3D print</span>
+          <div class="rf-row rf-row--video" id="rf-xp-stl-wrap">
+            <button type="button" class="rf-row-hit" id="rf-xp-stl" title="Shift-click for a finer mesh">
+              <span class="rf-row-t">STL</span>
+              <span class="rf-row-s" id="rf-xp-stl-s">3D print</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div class="sp-pill" id="sp-pill" role="toolbar" aria-label="Spectra controls">
+      <div class="rf-pill" id="rf-pill" role="toolbar" aria-label="Refract controls">
         <!-- Glass/Chrome switch removed for now (engine still supports chrome) -->
-        <button type="button" class="sp-btn" id="sp-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-light">Light</button>
-        <button type="button" class="sp-btn" id="sp-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-logo">Logo</button>
-        <button type="button" class="sp-btn" id="sp-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-export">Export</button>
+        <button type="button" class="rf-btn" id="rf-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-light">Light</button>
+        <button type="button" class="rf-btn" id="rf-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-logo">Logo</button>
+        <button type="button" class="rf-btn" id="rf-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-export">Export</button>
       </div>
     </div>
   </div>
 
-  <div class="sp-dropzone" id="sp-dropzone" aria-hidden="true"><span>Drop to use as your prism</span></div>
+  <div class="rf-dropzone" id="rf-dropzone" aria-hidden="true"><span>Drop to use as your prism</span></div>
 </div>
 
 <script>
-/* Spectra — src/samples.js
- * window.SpectraSamples : original built-in marks (no real logos). viewBox-only SVGs, filled paths built
- * from straight lines + exact circular arcs (smooth curvature -> clean refraction). Overlapping subpaths
- * share one orientation, so the default nonzero fill unions them. Min feature >= ~10% of the box.
+/* Refract — src/samples.js
+ * window.RefractSamples: the built-in preset logos, in display order. Each is a viewBox-only SVG.
+ * X was traced from the supplied raster (straight-edge potrace) so it refracts cleanly.
  */
 (function (global) {
   'use strict';
-  global.SpectraSamples = [
-    { id: "spark", name: "Spark",
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M45 9A5 5 0 0 1 55 9C55 32 68 45 91 45A5 5 0 0 1 91 55C68 55 55 68 55 91A5 5 0 0 1 45 91C45 68 32 55 9 55A5 5 0 0 1 9 45C32 45 45 32 45 9Z"/></svg>' },
-    { id: "links", name: "Links",
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M53.438 25.45A26 26 0 0 1 87.967 48.691A26 26 0 0 1 55.95 75.286A26 26 0 0 1 39.437 37.08A13 13 0 0 1 48.188 41.924A16 16 0 0 0 56.414 64.993A16 16 0 0 0 77.729 52.93A16 16 0 0 0 62.188 34.001A29 29 0 0 0 53.438 25.45ZM46.563 74.55A26 26 0 0 1 12.033 51.309A26 26 0 0 1 44.05 24.714A26 26 0 0 1 60.563 62.92A13 13 0 0 1 51.813 58.076A16 16 0 0 0 43.586 35.007A16 16 0 0 0 22.271 47.07A16 16 0 0 0 37.812 65.999A29 29 0 0 0 46.563 74.55Z"/></svg>' },
-    { id: "loop", name: "Loop",
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M53.455 65.234L64.273 56.347A10 10 0 0 0 78.837 57.298A10 10 0 0 0 78.837 42.702A10 10 0 0 0 64.273 43.653L53.455 34.766A24 24 0 0 1 88.409 32.486A24 24 0 0 1 88.409 67.514A24 24 0 0 1 53.455 65.234ZM46.545 65.234A24 24 0 0 1 11.591 67.514A24 24 0 0 1 11.591 32.486A24 24 0 0 1 46.545 34.766L35.727 43.653A10 10 0 0 0 21.163 42.702A10 10 0 0 0 21.163 57.298A10 10 0 0 0 35.727 56.347L46.545 65.234ZM35.727 43.653L46.545 34.766L64.273 56.347L53.455 65.234L35.727 43.653ZM53.455 34.766L64.273 43.653L61 47.637L51.941 36.609L53.455 34.766ZM35.727 56.347L39 52.363L48.059 63.391L46.545 65.234L35.727 56.347Z"/></svg>' },
-    { id: "ribbon", name: "Ribbon",
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M72.074 42.737L58.829 35.695A10 10 0 0 0 53.201 21.526A10 10 0 0 0 40.132 29.378A10 10 0 0 0 50 41L50 56A25 25 0 0 1 25.331 26.946A25 25 0 0 1 58.002 7.315A25 25 0 0 1 72.074 42.737ZM50 41A25 25 0 0 1 74.669 70.054A25 25 0 0 1 41.998 89.685A25 25 0 0 1 27.926 54.263L41.171 61.305A10 10 0 0 0 46.799 75.474A10 10 0 0 0 59.868 67.622A10 10 0 0 0 50 56L50 41Z"/></svg>' },
-    { id: "mono", name: "Mono",
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M29.5 78L14.5 78L14.5 27L29.5 27L29.5 78ZM16.281 31.852L27.719 22.148L55.719 55.148L44.281 64.852L16.281 31.852ZM55.719 64.852L44.281 55.148L72.281 22.148L83.719 31.852L55.719 64.852ZM70.5 27L85.5 27L85.5 78L70.5 78L70.5 27ZM29.5 78A7.5 7.5 0 0 1 22 85.5A7.5 7.5 0 0 1 14.5 78A7.5 7.5 0 0 1 22 70.5A7.5 7.5 0 0 1 29.5 78ZM29.5 27A7.5 7.5 0 0 1 22 34.5A7.5 7.5 0 0 1 14.5 27A7.5 7.5 0 0 1 22 19.5A7.5 7.5 0 0 1 29.5 27ZM57.5 60A7.5 7.5 0 0 1 50 67.5A7.5 7.5 0 0 1 42.5 60A7.5 7.5 0 0 1 50 52.5A7.5 7.5 0 0 1 57.5 60ZM85.5 27A7.5 7.5 0 0 1 78 34.5A7.5 7.5 0 0 1 70.5 27A7.5 7.5 0 0 1 78 19.5A7.5 7.5 0 0 1 85.5 27ZM85.5 78A7.5 7.5 0 0 1 78 85.5A7.5 7.5 0 0 1 70.5 78A7.5 7.5 0 0 1 78 70.5A7.5 7.5 0 0 1 85.5 78Z"/></svg>' },
-    { id: "gem", name: "Gem",
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M10.678 37.2L27.726 19.377L32.376 37.2L10.678 37.2ZM32.894 17L67.106 17L61.837 37.2L38.163 37.2L32.894 17ZM72.274 19.377L89.322 37.2L67.624 37.2L72.274 19.377ZM10.352 42.8L33.876 42.8L45.638 84.808L10.352 42.8ZM39.692 42.8L60.308 42.8L50 79.615L39.692 42.8ZM63.216 42.8L89.648 42.8L50 90L63.216 42.8Z"/></svg>' }
+  global.RefractSamples = [
+    { id: "hermes", name: "Hermes Agent",
+      svg: "<svg fill-rule=\"evenodd\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M5.938 12.835c.127-.039.285.02.373.143.028.038.036.092.046.14.003.014-.02.033-.04.05-.124-.098-.24-.194-.354-.291-.011-.01-.016-.027-.025-.042zM8.396 9.412c.195-.032.39-.06.588-.05a.54.54 0 01.148.026c.202.071.402.147.601.224.028.01.05.036.075.055l-.013.027a9.203 9.203 0 01-.26-.089c-.115-.038-.213-.077-.315-.098-.25-.05-.25-.046-.292-.014l.574.144c.275.139.55.276.823.417.042.022.09.057.107.098.026.06.063.076.117.072.066-.006.132-.017.213-.027l-.04.086c.051.08.142.02.216.064-.074.13-.247.09-.334.199l.061.074-.12.087c0 .106-.038.168-.306.243l.026.085-.196.042.07.124h-.25l-.007.137c-.081-.01-.161-.018-.244-.027l-.053.123c-.027-.008-.052-.011-.073-.023-.067-.038-.128-.056-.195.006-.019.017-.063.014-.093.008-.026-.006-.05-.029-.07-.042-.11.095-.11.095-.208.003-.057.046-.12.074-.186.011-.063.027-.123-.02-.178-.014-.07.007-.097-.035-.133-.07l-.13.033c-.013-.236-.194-.19-.34-.203.005-.072.05-.092.095-.094a.474.474 0 01.159.022c.164.05.32.12.496.138.203.021.405.029.601-.015.265-.059.52-.149.707-.365.049-.056.083-.127.117-.195.019-.038.02-.084-.02-.116a1.397 1.397 0 00-.382-.217c.024.12-.031.182-.115.221 0 .014-.004.025 0 .03.08.115.084.16-.007.267a1.39 1.39 0 01-.218.211.477.477 0 01-.641-.05 1.36 1.36 0 01-.133-.152c-.078-.107-.076-.108-.033-.236-.165-.08-.128-.226-.104-.364.008-.05.028-.096.049-.163-.04.014-.067.017-.087.032a.897.897 0 00-.316.357c-.007.016-.01.034-.02.047-.012.015-.034.038-.045.035-.02-.006-.037-.027-.05-.045-.008-.012-.007-.032-.012-.057h-.126l.053-.172a14.82 14.82 0 00-.039-.049l.11-.284c-.06.026-.091.044-.124.051-.03.007-.064 0-.095 0 0-.031-.01-.07.004-.092.149-.22.305-.428.593-.476z\"></path><path d=\"M8.06 10.788c-.003-.038-.004-.075.037-.062.016.006.034.048.028.067-.01.04-.038.032-.064-.005z\"></path><path clip-rule=\"evenodd\" d=\"M11.981.009c.226-.012.453-.011.679 0 .247.01.495.024.74.062.401.064.798.157 1.19.273.463.138.92.299 1.356.511a7.31 7.31 0 012.948 2.642c.292.469.536.963.739 1.479.219.556.446 1.11.623 1.683.204.654.329 1.326.458 1.997.097.504.182 1.01.29 1.511.156.722.329 1.44.494 2.16.186.812.4 1.615.63 2.415.102.355.193.713.282 1.072.11.436.202.876.254 1.323.031.278.066.557.073.837a7.56 7.56 0 01-.017.88c-.037.413-.1.818-.226 1.212a5.017 5.017 0 01-.915 1.649l-.13.156.018.023c.043-.023.088-.041.127-.068.2-.138.373-.307.531-.49.4-.46.721-.973.975-1.529a3.59 3.59 0 00.325-1.72c-.024-.424-.097-.834-.3-1.213-.013-.027-.015-.06-.03-.121.05.035.082.048.101.072.107.13.22.258.315.398.33.494.46 1.052.486 1.64a3.75 3.75 0 01-.47 1.97c-.36.655-.887 1.14-1.526 1.506-.193.111-.394.21-.595.308-.157.078-.248.211-.318.365a.522.522 0 00-.033.406.359.359 0 01.013.139c-.005.077-.077.155-.14.162-.054.006-.125-.043-.15-.116a1.206 1.206 0 01-.06-.233c-.04-.314-.155-.6-.308-.87a3.906 3.906 0 00-.73-.91 2.129 2.129 0 00-.897-.524 4.093 4.093 0 00-.692-.131c-.075-.008-.15-.04-.22.01.18.06.363.11.538.18.434.173.82.43 1.18.728.308.255.58.543.794.884.098.155.186.315.227.496.027.123.042.25.067.375.013.062-.002.109-.053.144-.047.033-.122.034-.163-.01a.455.455 0 01-.08-.14c-.03-.073-.038-.159-.078-.225a7.314 7.314 0 00-1.423-1.664c-.16-.137-.329-.26-.537-.323-.376-.114-.753-.203-1.15-.154-.213.025-.427.032-.64.053a1.6 1.6 0 00-.736.278 5.14 5.14 0 00-.834.72c-.329.342-.642.699-.955 1.055-.136.155-.264.319-.314.531a5.227 5.227 0 00-.012.051.096.096 0 01-.09.076h-.31c-.046 0-.082-.048-.072-.094.023-.108.045-.216.07-.324.075-.325.19-.635.368-.917.024-.039.04-.088.104-.08l.01.049.027.077c.28-.435.571-.834.996-1.135.283-.204.584-.378.89-.55a.196.196 0 00-.098-.002c-.162.043-.325.084-.485.134-.402.124-.764.33-1.11.566-.147.1-.298.193-.414.333a7.314 7.314 0 00-1.07 1.767.845.845 0 00-.04.12.075.075 0 01-.072.056h-.494c-.04 0-.062-.051-.036-.082.123-.14.246-.282.377-.415.275-.281.58-.532.777-.884.027-.048.063-.09.095-.135.238-.333.54-.607.818-.902.082-.086.175-.16.26-.24.029-.027.053-.057.079-.085l-.018-.025-.135.041c-.034.017-.07.031-.102.05-.248.144-.494.292-.743.433-.408.23-.825.439-1.209.711-.281.2-.591.358-.889.533-.02.012-.044.015-.08.028-.015-.135.143-.201.108-.336-.033.014-.064.02-.085.038-.111.096-.227.19-.328.296-.148.157-.284.325-.425.488-.125.143-.25.286-.373.431A.153.153 0 019.89 24H8.762a.316.316 0 00.016-.042c.028-.09.085-.172.083-.28-.091-.018-.162.001-.212.077a4.45 4.45 0 00-.136.215c-.01.016-.024.03-.042.03h-.093c-.019 0-.029-.022-.017-.037.071-.088.14-.178.209-.268.001-.002-.006-.012-.012-.024-.014.004-.03.006-.045.013-.176.09-.352.181-.527.274a.363.363 0 01-.168.042H5.202c-.026 0-.039-.036-.019-.053.21-.178.402-.374.558-.605.335-.496.538-1.047.667-1.629.004-.02-.003-.043-.006-.091-.037.048-.059.072-.076.1a1.943 1.943 0 01-.334.415c-.28.258-.59.448-.983.464-.297.012-.588 0-.865-.127-.46-.21-.722-.57-.794-1.072-.025-.17-.017-.171-.182-.219A3.513 3.513 0 011.97 20.6a2.286 2.286 0 01-.808-1.13 3.569 3.569 0 01-.16-1.245c.002-.034.016-.067.024-.1.032.023.046.043.05.066.033.153.059.308.096.46.086.355.257.664.516.92.258.256.571.419.91.532.358.118.717.138 1.07-.016a1.89 1.89 0 00.621-.452c.328-.348.533-.76.648-1.223.009-.034.005-.071.007-.11-.015.006-.026.006-.03.011-.031.05-.064.1-.093.152-.284.502-.679.887-1.196 1.135-.351.17-.718.255-1.11.159a1.607 1.607 0 01-.971-.64 2.006 2.006 0 01-.368-.924 2.903 2.903 0 01.02-.886c.05-.439.466-1.17.742-1.271-.02.063-.035.112-.053.16-.043.116-.097.227-.13.345a1.901 1.901 0 00-.05.82c.033.212.09.416.204.6.147.236.346.407.62.465.11.023.225.014.338.018a.576.576 0 00.386-.131c.164-.128.282-.292.366-.481.168-.375.24-.777.309-1.179.05-.296.093-.594.133-.893.039-.281.071-.563.104-.845.026-.232.048-.464.074-.696.024-.228.052-.455.076-.683.024-.227.047-.455.069-.683.013-.14.022-.28.034-.42l.037-.417c.022-.25.041-.5.065-.748.008-.082-.02-.132-.09-.177a2.46 2.46 0 01-.492-.418c-.1-.109-.188-.228-.282-.342-.035-.042-.056-.097-.116-.118a2.084 2.084 0 00.275.597c.06.092.131.176.196.265.063.086.182.115.234.226-.028.003-.046.01-.06.006a4.74 4.74 0 01-.22-.057 2.71 2.71 0 01-1.287-.819c-.435-.487-.656-1.076-.71-1.723a5.206 5.206 0 01.014-1.06c.072-.602.22-1.186.45-1.745.155-.376.338-.741.526-1.102.205-.393.466-.75.765-1.076.512-.559 1.104-1.024 1.726-1.448.717-.49 1.478-.898 2.277-1.233C8.244.828 8.767.632 9.31.494c.655-.166 1.31-.33 1.982-.415.229-.03.458-.058.688-.07zm-1.847 22.82c-.07.06-.147.111-.207.18-.238.27-.464.549-.668.869l-.044.108a.177.177 0 00.093-.057c.174-.19.351-.378.519-.574.104-.122.195-.255.288-.386.024-.034.03-.08.046-.12l-.027-.02zm1.65-3.695a5.51 5.51 0 00-.653.593l-.37.386a.963.963 0 01-.377.25 1.372 1.372 0 01-.467.09c-.044 0-.087.006-.151.012.028.058.043.097.064.131.15.242.301.482.45.724.136.22.276.438.399.666.068.125.105.267.156.404.077.027.14-.018.202-.048.29-.135.579-.274.867-.412.213-.101.437-.186.636-.31.347-.215.68-.455 1.018-.685.015-.01.026-.028.042-.046-.023-.019-.038-.037-.056-.044-.287-.111-.527-.3-.77-.482a5.319 5.319 0 01-.506-.42 1.757 1.757 0 01-.41-.653c-.019-.049-.045-.095-.075-.156zm-5.847.264c-.06.096-.097.194-.132.293a3.38 3.38 0 01-.555 1.01c-.2.25-.455.412-.762.493-.23.06-.464.076-.7.07-.048-.002-.097.002-.158.005.016.04.021.066.035.085.1.145.23.246.4.295.157.046.316.034.498.023.181-.037.343-.115.485-.234.238-.199.402-.454.536-.732.175-.363.264-.751.342-1.144.01-.053.008-.11.011-.164zm14.945-4.586c.008.029.016.057.027.107.024.155.051.31.072.464.03.219.067.437.078.657.017.344.027.689-.014 1.033-.037.315-.063.633-.116.946a6.153 6.153 0 01-.46 1.518c-.008.018-.01.039-.02.082.047-.03.077-.042.098-.064.085-.083.17-.167.248-.255.271-.305.458-.66.596-1.043.18-.498.228-1.011.145-1.531-.103-.65-.33-1.263-.597-1.881a9.055 9.055 0 00-.024-.055l-.033.022zM5.797 8.29a.26.26 0 00.018.153c.124.251.25.501.379.75.025.049.066.09.03.163-.284.06-.578.119-.88.255.059.038.097.06.132.087.042.032.112.058.09.12-.01.033-.075.048-.117.072.017.01.043.021.067.036.166.102.33.207.447.368.138.192.229.404.188.644-.079.469-.306.85-.69 1.132-.054.04-.106.083-.161.122a.243.243 0 00-.103.245.77.77 0 00.055.195c.083.196.22.35.375.492.083.076.159.164.222.257a.37.37 0 01.025.377c-.023.05-.05.099-.076.148-.03.06-.028.111.022.162.041.042.08.089.112.138.038.058.078.079.147.05a.486.486 0 01.333-.006c.16.046.302.126.444.21.13.077.264.149.4.219.067.035.14.05.219.026.071-.022.124.01.145.076.02.064-.003.108-.074.139-.07.03-.137.063-.209.088-.1.035-.201.073-.314.077-.013-.107.11-.088.127-.159-.206-.126-.643-.145-.801-.034.063.112.035.21-.096.313-.13-.1-.025-.202.002-.3a.209.209 0 00-.249.17c-.015.101.067.216.178.224.108.007.218-.005.326-.012.06-.005.12-.027.199 0-.103.123-.248.127-.357.19.002.05.07.086.019.131-.053.048-.095-.001-.132-.03-.08-.063-.16-.126-.231-.197a.474.474 0 01-.157-.311.52.52 0 00-.043-.172c-.032-.074-.032-.137.033-.19-.018-.03-.028-.053-.045-.072a1.222 1.222 0 01-.196-.369c-.053-.137-.046-.264.048-.381.024-.03.05-.06.064-.095a.664.664 0 00.047-.168c.017-.165-.064-.287-.182-.387-.186-.156-.36-.322-.46-.551-.005-.011-.024-.017-.037-.026-.011.017-.024.027-.025.038-.019.185-.045.37-.052.557-.014.377.058.743.162 1.104.118.41.289.798.488 1.173.267.502.537 1.002.812 1.5.055.098.13.189.208.27.198.202.452.272.724.273.202 0 .404-.006.605-.026.295-.03.59-.073.884-.113.183-.025.365-.057.548-.08.21-.026.38.073.522.21.16.156.305.327.447.5.22.265.397.56.554.867.05.098.07.1.147.03.13-.121.26-.242.394-.36.067-.059.088-.12.067-.213a3.535 3.535 0 01-.085-.796c.002-.157.006-.314.018-.471.015-.224.03-.45.06-.672a59.114 59.114 0 01.362-2.298c.087-.493.182-.984.268-1.477.06-.347.118-.694.162-1.043.034-.273.055-.55.063-.825.011-.332.003-.665.002-.998 0-.077.004-.155-.01-.23-.028-.142-.01-.155-.162-.19a5.826 5.826 0 00-.607-.107c-.146-.018-.207-.053-.221-.19-.006-.049-.025-.098-.041-.146-.009-.025-.024-.048-.046-.09l-.025.264c-.009.096-.029.116-.127.115-.055 0-.11-.008-.164-.008-.476 0-.952-.008-1.426.032-.095.008-.173-.015-.226-.103-.04-.066-.088-.126-.134-.186-.063-.084-.086-.093-.182-.06-.195.068-.388.138-.582.21a2.71 2.71 0 00-.675.394.986.986 0 01-.323.168c-.033.01-.07.008-.127.013.02-.066.024-.114.047-.15.064-.105.135-.205.205-.306.023-.033.049-.063.073-.095l-.015-.023-.201.037c-.146.04-.296.07-.437.122-.148.053-.266.023-.386-.072a3.623 3.623 0 01-.733-.786l-.093-.132zm8.592 8.963l-.147.09c-.22.134-.44.266-.659.402-.093.058-.184.12-.27.188-.085.07-.124.161-.072.272.047.1.093.2.147.294.047.08.124.138.213.147.11.01.228.012.336-.012.217-.05.372-.205.528-.357a.291.291 0 00.087-.308c-.046-.18-.079-.365-.118-.547-.011-.052-.027-.103-.045-.169zm-.257-2.409c-.12.291-.205.597-.325.91-.151.433-.294.87-.435 1.323.036-.01.054-.01.067-.018.261-.16.522-.324.785-.484.054-.033.071-.078.065-.138-.012-.13-.024-.262-.034-.393l-.068-.886c-.008-.103-.02-.206-.029-.31-.009 0-.017-.002-.026-.004zm3.081-8.13l.099.285c.08.231.159.463.24.714l.58 1.952c.187.63.372 1.262.558 1.893.114.382.235.762.343 1.146.072.257.126.519.186.799.044.206.087.413.127.64.034.106.023.226.077.325l.025-.006-.068-.362c-.038-.206-.077-.412-.113-.638-.015-.07-.029-.141-.046-.211-.095-.396-.177-.796-.29-1.187-.196-.685-.413-1.364-.618-2.046-.165-.549-.322-1.1-.488-1.648-.069-.227-.15-.45-.226-.695l-.117-.336c-.037-.107-.075-.216-.115-.322-.04-.106-.084-.21-.127-.314a7.558 7.558 0 01-.027.01zM6.225 14.304c-.063-.001-.115.014-.134.083a.35.35 0 00.41.012 4.533 4.533 0 00-.276-.095zM5.23 11.98c-.026-.027-.057-.048-.075.002-.012.032-.007.07-.01.113.082-.037.082-.037.085-.115zm.062-1.189a.135.135 0 00-.088.056.197.197 0 00-.025.11c.005.152.01.306.026.457a.751.751 0 00.066.218c.061.136.157.167.288.101.055-.027.06-.054.025-.11a4.52 4.52 0 01-.129-.211c-.015-.068-.066-.131-.033-.207.04-.09-.076-.116-.074-.19V10.874c-.003-.038-.006-.087-.056-.083zm-.017-.968a.867.867 0 00-.467.127c-.076.045-.084.07-.05.158.034.087.07.173.115.254.064.117.09.125.21.077a.657.657 0 01.336-.053c.202.022.357.136.504.264l.092.077c.007-.006.014-.013.022-.018-.019-.105-.035-.226-.149-.264-.157-.053-.324-.075-.508-.117l-.24-.005c.24-.169.452-.044.687.009-.063-.115-.153-.147-.23-.193-.082-.05-.17-.092-.25-.144-.06-.037-.12-.08-.072-.172zm10.233.325c-.23-.01-.427.08-.608.211-.034.026-.06.065-.105.117.087.026.15.046.232.065.044-.015.088-.03.13-.046.306-.114.61-.115.904.031.126.063.237.04.366-.005-.02-.031-.03-.054-.045-.071a.986.986 0 00-.448-.273c-.14-.044-.284-.024-.426-.03zM7.99 6.483a.308.308 0 00.002.133c.08.321.156.643.242.962.104.387.27.75.456 1.103.02.037.061.08.098.087a.404.404 0 00.253-.051l-.472-.84c-.23-.448-.405-.92-.579-1.394zM10.397.497c-.2-.008-.405.004-.603.034-.236.035-.47.087-.7.152-.287.08-.569.18-.852.273-.04.013-.074.038-.11.058.028.014.05.018.07.014.287-.068.58-.085.873-.09.134-.002.269.009.402.025.19.024.382.048.57.09.456.104.874.3 1.265.556.464.306.888.66 1.257 1.078.205.232.395.475.56.739.17.274.315.561.449.856.273.601.456 1.232.6 1.876.04.173.07.348.1.524.017.104.065.167.17.19.122.028.2.105.22.251-.003.102-.06.174-.129.24a1.065 1.065 0 00-.268.358.164.164 0 00.083-.039c.08-.086.162-.172.235-.265a.56.56 0 00.13-.333c.009-.05.022-.1.024-.15.007-.124-.017-.15-.143-.168-.025-.004-.049-.014-.073-.015-.082-.007-.125-.063-.137-.131-.033-.198-.004-.355.247-.408.086-.018.174-.03.26-.042.158-.023.315-.053.473-.067.14-.012.19.033.226.167.008.029.018.057.021.087.019.179-.008.225-.141.288-.027.013-.055.024-.078.042a.148.148 0 00-.051.067c-.039.144.073.382.206.445l.673.32c.023.011.05.015.075.023l.018-.026c-.015-.008-.032-.013-.044-.024a2.27 2.27 0 00-.544-.32 4.898 4.898 0 00-.173-.075.203.203 0 01-.126-.191c-.003-.085.045-.154.128-.187l.059-.025c.099-.044.118-.076.112-.187a.384.384 0 00-.008-.063c-.067-.294-.123-.59-.205-.88a9.478 9.478 0 00-.826-2.036 7.465 7.465 0 00-1.39-1.805 4.536 4.536 0 00-1.177-.824 3.656 3.656 0 00-1.016-.328 6.155 6.155 0 00-.712-.074zm6.719 5.955c.01.014.018.028.038.034l-.022-.044-.016.01zM4.103 3.917a.062.062 0 01-.03.012.455.455 0 01-.04.039c-.01.01-.02.02-.045.04l-.363.354c-.088.085-.17.178-.266.253-.284.22-.425.53-.544.855a.132.132 0 00-.007.071c.013.055.033.108.052.168l.074.026c-.017.056-.03.105-.047.152-.058.164-.118.327-.175.491-.005.015.008.036.019.077.08-.175.158-.33.225-.489.228-.544.484-1.074.819-1.561.09-.133.182-.266.283-.401.004-.006.007-.013.022-.03.001-.016.003-.032.015-.04l.008-.017zm12.976 2.408a.023.023 0 01.009.019.073.073 0 00-.006.01.188.188 0 00.007.02l.018.022c.002-.007.007-.016.005-.021-.003-.01-.012-.018-.02-.038a1.331 1.331 0 01-.013-.012zM4.199 4.48c-.003.004-.008.008-.027.014-.005.013-.011.025-.031.047a2.085 2.085 0 01-.124.167c-.048.07-.116.055-.181.041-.134-.028-.228.016-.287.143-.089.187-.187.37-.273.56-.049.108-.11.216-.118.36.081.003.154.007.228.008h.228a2.563 2.563 0 01-.079.264c-.01.052-.022.103-.033.155l.02.004c.018-.046.037-.092.067-.153.066-.142.13-.285.2-.426.02-.04.034-.1.116-.092 0 .043.004.084 0 .124-.005.045-.017.09-.028.143.141.043.086.174.115.269.102-.022.104-.195.248-.144v.205l.017.002.439-1.059c-.13 0-.246-.02-.358.033-.024.011-.058-.001-.108-.004.075-.15.139-.278.211-.417a.128.128 0 01.025-.036c0-.015-.001-.03.008-.038l.006-.02c-.005.006-.01.011-.028.017-.004.012-.009.024-.026.045a.085.085 0 01-.032.033c-.123.157-.09.164-.258.106-.079-.027-.078-.028-.047-.144.028-.046.056-.093.098-.15 0-.016-.001-.032.007-.042L4.2 4.48zm2.073-.67c-.003.006-.007.011-.027.016-.094.125-.194.246-.28.377-.155.238-.301.481-.451.723-.14.224-.345.368-.575.481-.017.008-.04.006-.079.011.012-.059.016-.109.033-.153a6.076 6.076 0 01.229-.518l-.007-.02a.138.138 0 01-.035.025c-.028.05-.055.1-.093.164-.26.424-.443.817-.442.95.024.004.048.011.073.013.177.013.188.007.26-.165.03-.07.077-.12.147-.15l.175-.07c.044-.018.085-.057.146-.032.003.05-.01.11.014.145.042.062.044.125.047.193.002.049.017.098.026.147.029-.034.039-.065.05-.097.142-.39.277-.782.428-1.17.1-.256.22-.504.33-.756.013-.03.013-.067.03-.092V3.81zm3.987-.34c0 .045.01.084.021.123.042.16.094.318.124.48.024.133.023.27.028.406 0 .033-.019.067-.032.11-.094-.058-.047-.158-.106-.215h-.125c-.015.072-.01.152-.046.2-.066.085-.155.154-.236.227-.043.038-.078.018-.103-.025l-.046-.087c-.065.035-.117.069-.172.093-.116.051-.235.095-.35.147-.085.038-.09.053-.07.147.014.075.034.148.047.223.013.072.05.109.123.124.233.05.462.115.657.265.058-.102.058-.102.168-.151.03-.014.06-.03.092-.042.08-.03.115-.017.15.06.023.048.041.098.066.158.06-.14-.042-.267.017-.416.157.18.24.39.375.567a.235.235 0 00.022-.098c.002-.124 0-.247.002-.371 0-.034.013-.067.02-.1l.032-.003c.11.155.13.354.226.52a3.036 3.036 0 00-.01-.392c-.004-.045 0-.074.05-.088.08.036.116.14.215.158-.03-.275-.423-1.137-.798-1.635-.114-.127-.2-.28-.34-.386zm-2.667.696c-.019.034-.03.05-.037.067-.061.185-.125.37-.18.556-.031.105-.087.169-.195.19-.09.019-.178.052-.268.073-.038.009-.089.015-.118-.003-.024-.016-.025-.069-.036-.106-.064.076-.082.087-.17.047-.133-.062-.262-.135-.393-.201-.048-.025-.093-.063-.17-.03-.043.12-.091.25-.137.382-.099.28-.087.242.095.453.046.048.102.03.154.023.054-.009.106-.03.16-.036.13-.013.26-.08.367-.015.204-.064.387-.122.571-.178.05-.015.089.005.114.054.022.042.034.093.082.121.038-.056-.013-.128.063-.178l.14.241-.042-1.46zm.278.358c-.096-.01-.107.01-.11.108-.002.038-.003.078.002.115.03.2.099.386.174.57.002.006.012.01.022.015l.078-.05c.052.036.081.088.153.088.205-.002.41.014.616.012.099-.001.158.042.205.12.018.03.024.077.088.066l-.08-.394c-.05-.195-.085-.395-.172-.589-.057.057-.114.068-.18.046a.72.72 0 00-.135-.028c-.22-.028-.44-.059-.66-.08zm10.254-1.727c.089.163.155.316.139.491-.016.168.026.342-.044.516-.047-.033-.088-.082-.112-.075-.117.035-.164-.057-.227-.115a4.772 4.772 0 01-.286-.29l-.104-.113a4.856 4.856 0 01-.023.019c.035.046.07.093.11.156.04.064.084.127.122.193.034.058.065.118.031.205-.082-.01-.164-.019-.246-.032-.06-.01-.101 0-.124.07-.031.098-.037.096-.15.09.02.042.036.08.057.116.041.074.03.138-.03.196-.06.06-.118.122-.178.181a.175.175 0 01-.185.046c-.222-.061-.447-.113-.67-.174-.032-.009-.063-.04-.086-.068-.03-.04-.052-.087-.08-.13-.044-.07-.09-.138-.136-.207a.18.18 0 00-.014.105c.012.127.03.253.035.38.005.1-.024.12-.121.104-.104-.017-.206-.04-.31-.058-.064-.012-.131-.028-.202.03l.081.208c.09 0 .166-.01.237.002a.819.819 0 01.458.251c.078.083.154.168.241.26l.018-.005c-.004-.006-.008-.013-.01-.04.014-.056-.062-.118.018-.178.031.03.064.057.088.09.058.078.111.159.169.257l.089.141.024-.013a2093.819 2093.819 0 01-.427-.934c.055.007.083.007.108.016.193.07.385.142.577.216.074.028.147.06.219.094.062.028.112.018.157-.033.05-.056.102-.112.154-.167.05-.051.095-.046.132.014.016.025.026.053.04.08.071.138.143.277.217.433l.159.308.025-.011c-.044-.106-.07-.218-.138-.334-.057-.182-.168-.346-.206-.545.136.034.362.326.567.732l.057.074.018-.011a1.563 1.563 0 01-.052-.127c-.046-.145-.097-.29-.136-.436-.022-.083-.036-.173.022-.26l.109.058-.026-.207.027-.016c.022.02.05.036.065.06.073.108.143.22.215.33.01.016.029.029.043.043-.036-.217-.2-.38-.229-.626l.155.112c.014-.166.012-.319.042-.465.032-.158-.023-.297-.063-.445.024.004.036.006.055.025.092.124.183.249.277.371.02.027.05.047.069.087l.04.063.019-.015a.293.293 0 01-.053-.082 27.922 27.922 0 01-.332-.49c-.221-.311-.363-.467-.485-.521zm-6.57.327c-.003.161.092.275.069.415l-.368.087c.09.139.032.237-.052.331-.05.057-.092.122-.143.178-.037.04-.046.078-.018.126l.16.275c.029.048.072.066.128.064.076-.003.152 0 .228-.001.116-.003.216.022.275.137.006.014.02.024.044.052.004-.059-.003-.098.01-.13.016-.04.04-.099.072-.108.084-.023.173-.024.26-.03.013-.001.027.018.04.029l.071.065c.019-.11-.082-.198-.024-.31l.126.04c-.026-.123-.07-.245-.071-.366 0-.123.051-.243.115-.36.107.062.16.156.234.253.183.265.36.533.494.834.165-.078.27.068.407.088-.003-.106-.133-.441-.197-.492a.142.142 0 00-.102-.028c-.06.011-.119.039-.191.063-.025-.039-.056-.078-.077-.122a3.936 3.936 0 00-.473-.783c-.076-.094-.16-.182-.228-.26l-.391.285c-.049.035-.094.03-.132-.017l-.169-.207c-.025-.03-.053-.059-.097-.108z\"></path></svg>" },
+    { id: "x", name: "X",
+      svg: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 960 868\"><path fill-rule=\"evenodd\" d=\"M24.8 856.8L33.7 846.5L195.9 660.1L358.0 473.7L355.3 470.1L352.6 466.5L176.6 236.0L0.6 5.5L0.2 2.8L-0.2 0.0L150.1 0.1L300.5 0.1L398.0 129.2L495.5 258.3L502.7 267.7L509.8 277.1L632.5 138.5L755.2 0.0L828.8 0.0L902.3 0.0L900.3 2.2L898.3 4.5L739.1 185.8L580.0 367.1L580.0 368.1L580.0 369.1L767.8 617.2L955.5 865.4L955.8 866.2L956.2 867.0L808.2 867.0L660.3 867.0L544.5 715.5L428.6 564.0L427.6 565.0L426.5 566.1L295.0 716.3L163.5 866.5L89.7 866.8L15.8 867.0L24.8 856.8ZM784.4 779.8L783.7 778.7L521.8 432.6L259.9 86.5L258.1 84.7L256.4 83.0L213.1 83.2L169.8 83.5L436.7 432.2L703.5 780.9L744.3 780.9L785.1 781.0L784.4 779.8Z\"/></svg>" },
+    { id: "vercel", name: "Vercel",
+      svg: "<svg viewBox=\"0 -17 256 256\" xmlns=\"http://www.w3.org/2000/svg\"><g><polygon points=\"128 0 256 221.705007 0 221.705007\"></polygon></g></svg>" },
   ];
-})(typeof window !== 'undefined' ? window : this);
+})(typeof window !== 'undefined' ? window : globalThis);
 
 ;
-/* Spectra — src/sdf.js
- * window.SpectraSDF : source (SVG text | image Blob | text) -> signed distance field.
+/* Refract — src/sdf.js
+ * window.RefractSDF : source (SVG text | image Blob | text) -> signed distance field.
  *
  * Pipeline
  *   main thread : sanitise / rasterise the source with antialiasing, centred, longest half-extent
@@ -432,7 +425,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
    * Worker core — fully self-contained (stringified into a Blob worker). Returns the
    * computeField function when called outside a worker (main-thread fallback).
    * ===================================================================================== */
-  function spectraSdfWorkerMain() {
+  function refractSdfWorkerMain() {
     'use strict';
     var SQ2 = Math.SQRT2;
     var HALF_SEG = 0.75; // half-length (raster px) of the edge segment attached to each site
@@ -476,7 +469,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       opts = opts || {};
       var t0 = now();
       var k = R / size;
-      if (k !== Math.floor(k) || k < 1) throw new Error('SpectraSDF: raster must be an integer multiple of size');
+      if (k !== Math.floor(k) || k < 1) throw new Error('RefractSDF: raster must be an integer multiple of size');
       var N = R * R, x, y, i, row, a, j, s;
 
       // guarantee an empty 1px frame (the shape never gets there; keeps neighbour reads in range)
@@ -515,7 +508,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         }
       }
       rowStart[R - 1] = n; rowStart[R] = n; rowStart[0] = 0;
-      if (n === 0) throw new Error('SpectraSDF: the source contains no visible shape');
+      if (n === 0) throw new Error('RefractSDF: the source contains no visible shape');
 
       // ---- 2. site geometry: sub-pixel edge point + outward normal (+ bbox) -------------
       var ex = new Float32Array(n), ey = new Float32Array(n);
@@ -573,7 +566,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       list = null;
       if (m2 !== n) { // compacted (iso model): rebuild the per-row index
         n = m2;
-        if (n === 0) throw new Error('SpectraSDF: the source contains no visible shape');
+        if (n === 0) throw new Error('RefractSDF: the source contains no visible shape');
         rowStart.fill(0);
         for (j = 0; j < n; j++) rowStart[qy[j] + 1]++;
         for (y = 0; y < R; y++) rowStart[y + 1] += rowStart[y];
@@ -838,7 +831,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   // ---------- worker management ----------
   var localCompute = null;
   function computeLocal(msg) {
-    if (!localCompute) localCompute = spectraSdfWorkerMain();
+    if (!localCompute) localCompute = refractSdfWorkerMain();
     return localCompute(msg);
   }
 
@@ -857,7 +850,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         resolve(null);
       }
       try {
-        var src = '(' + spectraSdfWorkerMain.toString() + ')();';
+        var src = '(' + refractSdfWorkerMain.toString() + ')();';
         url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
         w = new Worker(url);
       } catch (e) { fail(); return; }
@@ -953,7 +946,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         var done = function () { URL.revokeObjectURL(url); resolve(img); };
         if (img.decode) img.decode().then(done, done); else done();
       };
-      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('SpectraSDF: the SVG could not be rendered')); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('RefractSDF: the SVG could not be rendered')); };
       img.src = url;
     });
   }
@@ -1018,7 +1011,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       var s = hd.querySelector('svg');
       if (s && s.namespaceURI === SVG_NS) root = s;
     }
-    if (!root) throw new Error('SpectraSDF: could not parse the SVG');
+    if (!root) throw new Error('RefractSDF: could not parse the SVG');
     return root;
   }
 
@@ -1072,7 +1065,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         live.setAttribute('width', '1000'); live.setAttribute('height', '1000');
         var bb = null;
         try { bb = live.getBBox(); } catch (e) { bb = null; }
-        if (!bb || !(bb.width > 0 || bb.height > 0)) throw new Error('SpectraSDF: SVG has no size and no measurable content');
+        if (!bb || !(bb.width > 0 || bb.height > 0)) throw new Error('RefractSDF: SVG has no size and no measurable content');
         var pad = 0.2 * Math.max(bb.width, bb.height) + 4;
         vb = [bb.x - pad, bb.y - pad, bb.width + 2 * pad, bb.height + 2 * pad];
         notes.push('viewBox derived from content bbox');
@@ -1186,7 +1179,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     var cov1 = alphaOf(cv1.ctx, m.w, m.h);
     releaseCanvas(cv1);
     var bb = covBBox(cov1, m.w, m.h, 0);
-    if (!bb) throw new Error('SpectraSDF: the SVG contains no visible shapes');
+    if (!bb) throw new Error('RefractSDF: the SVG contains no visible shapes');
     var vb = prep.vb;
     var ux0 = vb[0] + bb.x0 / m.sx, ux1 = vb[0] + bb.x1 / m.sx;
     var uy0 = vb[1] + bb.y0 / m.sy, uy1 = vb[1] + bb.y1 / m.sy;
@@ -1210,7 +1203,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     var lines = text.split(/\r?\n/).map(function (s) { return s.replace(/\s+$/, ''); });
     while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
     while (lines.length && !lines[0].trim()) lines.shift();
-    if (!lines.length) throw new Error('SpectraSDF: text is empty');
+    if (!lines.length) throw new Error('RefractSDF: text is empty');
     var family = src.fontFamily || 'Inter, system-ui, sans-serif';
     var weight = src.fontWeight || 700;
     var style = src.fontStyle || 'normal';
@@ -1236,7 +1229,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       y0 = Math.min(y0, by - mt.actualBoundingBoxAscent); y1 = Math.max(y1, by + mt.actualBoundingBoxDescent);
     });
     releaseCanvas(cvm);
-    if (!(x1 > x0) || !(y1 > y0)) throw new Error('SpectraSDF: text has no visible glyphs');
+    if (!(x1 > x0) || !(y1 > y0)) throw new Error('RefractSDF: text has no visible glyphs');
     var s = (FILL_HALF * R / 2) / (Math.max(x1 - x0, y1 - y0) / 2);
     var bcx = (x0 + x1) / 2, bcy = (y0 + y1) / 2;
     var cv = makeCanvas(R, R), ctx = cv.ctx;
@@ -1257,7 +1250,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     var bmp = await createImageBitmap(blob);
     var decodeMs = now() - td;
     var W0 = bmp.width, H0 = bmp.height;
-    if (!(W0 > 0 && H0 > 0)) throw new Error('SpectraSDF: empty image');
+    if (!(W0 > 0 && H0 > 0)) throw new Error('RefractSDF: empty image');
     var s0 = Math.min(1, 2048 / Math.max(W0, H0));
     var w = Math.max(1, Math.round(W0 * s0)), h = Math.max(1, Math.round(H0 * s0));
     var cva = makeCanvas(w, h);
@@ -1290,7 +1283,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         var dd = Math.sqrt(dr * dr + dg * dg + db * db);
         dist[i] = dd; if (dd > maxD) maxD = dd;
       }
-      if (maxD < 24) throw new Error('SpectraSDF: could not separate the shape from the background');
+      if (maxD < 24) throw new Error('RefractSDF: could not separate the shape from the background');
       if (lossyMime) {
         // JPEG & co. store chroma at half resolution: if luma alone separates the shape, use it
         var Ybg = 0.2126 * br + 0.7152 * bg + 0.0722 * bb2, distY = new Float32Array(n), ys = [], maxY = 0;
@@ -1331,7 +1324,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     }
     despeckle(cov, w, h);
     var bbx = covBBox(cov, w, h, 8);
-    if (!bbx) throw new Error('SpectraSDF: the image contains no visible shape');
+    if (!bbx) throw new Error('RefractSDF: the image contains no visible shape');
     // A raster has no more edge information than its own pixels: upsampling the coverage would bake
     // the source pixel grid into the edge (periodic ripples). Instead the exact AA-EDT runs at source
     // resolution on a square domain covering the whole field, and the (locally linear) distance is
@@ -1426,7 +1419,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     opts = opts || {};
     var src = normaliseSource(source);
     var size = Math.round(opts.size || 1024);
-    if (!(size >= 32 && size <= 4096)) throw new Error('SpectraSDF: size must be in [32, 4096]');
+    if (!(size >= 32 && size <= 4096)) throw new Error('RefractSDF: size must be in [32, 4096]');
     var rs = chooseRaster(size, opts), R = rs.R;
     var t0 = now();
     var r;
@@ -1436,10 +1429,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     } else if (src.type === 'text') {
       r = await rasterText(src, R);
     } else if (src.type === 'image') {
-      if (!src.blob) throw new Error('SpectraSDF: image source needs a blob');
+      if (!src.blob) throw new Error('RefractSDF: image source needs a blob');
       r = await rasterImage(src.blob, R);
     } else {
-      throw new Error('SpectraSDF: unknown source type ' + src.type);
+      throw new Error('RefractSDF: unknown source type ' + src.type);
     }
     var t1 = now();
     var res;
@@ -1447,7 +1440,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     try {
       res = await runEDT(r, R, size, { domain: r.domain, edgeModel: r.edgeModel, smooth: opts.smooth !== false, debugSites: !!opts.debugSites, refinePx: opts.refinePx });
     } catch (e) {
-      if (/worker crashed/.test(String(e && e.message))) throw new Error('SpectraSDF: worker crashed (out of memory?) — try a smaller size');
+      if (/worker crashed/.test(String(e && e.message))) throw new Error('RefractSDF: worker crashed (out of memory?) — try a smaller size');
       throw e;
     }
     var t2 = now();
@@ -1520,7 +1513,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     return c;
   }
 
-  global.SpectraSDF = {
+  global.RefractSDF = {
     build: build,
     toPreviewCanvas: toPreviewCanvas,
     sample: sampleField,                 // (field, xPix, yPix) -> bilinear distance (logo units)
@@ -1530,7 +1523,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 })(typeof window !== 'undefined' ? window : this);
 
 ;
-/* Spectra engine v2 — "clean" renderer.
+/* Refract engine v2 — "clean" renderer.
  * Your logo is the prism: a white light beam (CPU-traced through the logo's 2D distance field, 48
  * wavelengths × 9 slices) enters, refracts, and leaves as a continuous rainbow fan. The logo itself is
  * an analytically extruded SDF, raymarched deterministically: dark dielectric glass that refracts the
@@ -1549,7 +1542,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   // Matches vgpu's measured 'flint' preset (B = 0.0105). The old stylised B = 0.065 was ~6× real flint: a 26° fan through
   // a 60° prism instead of ~5°, which swamped how each shape actually bends light.
   // The BEAM uses vgpu's 'stylised' spectral material, n(λ) = 1.2 + 0.1/λ² (λ in µm), traced with exact Snell + Fresnel:
-  // a gentle bend with a wide, clean fan. Written here in Spectra's form n_d + B(1/λ² − 1/λd²).
+  // a gentle bend with a wide, clean fan. Written here in Refract's form n_d + B(1/λ² − 1/λd²).
   const IOR = 1.2 + 0.1 / (0.5876 * 0.5876), CAUCHY_B = 0.07; // vgpu's 0.1 eased slightly: arbitrary logos (not a clean prism) otherwise split into many crossing fans
   // The GLASS itself is shaded as clear glass (≈ crown) with only a hint of dispersion: as on vgpu.sh, the colour lives
   // in the beam, not smeared through the glass.
@@ -1771,6 +1764,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     float lum = dot(R, vec3(0.2126,0.7152,0.0722));
     return R*smoothstep(0.6, 2.4, lum)*0.22*(0.65+0.35*pow(1.0-ci,1.5));
   }
+  float gLost = 0.0; // debug 3: share of the light still trapped inside the glass when tracing gives up
   vec3 shadeGlass(vec3 p, vec3 n, vec3 rd){
     float ci = clamp(-dot(rd,n),0.0,1.0);
     float F = fresnel(ci, 1.0, uIor);
@@ -1783,7 +1777,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       vec3 w = specW(lam); float nl = iorAt(lam);
       vec3 dir = refract(rd, n, 1.0/nl);
       vec3 pos = p - n*0.0012; float thr = 1.0-F; vec3 L = vec3(0.0); vec3 trans = vec3(1.0);
-      for (int b=0;b<2;b++){
+      for (int b=0;b<4;b++){ // follow light through up to 4 internal bounces (was 2: thin shapes lost most of it)
         float tl = marchIn(pos, dir); vec3 q = pos + dir*tl; vec3 nq = normalAt(q);
         trans *= exp(-uAbsorb*tl);
         vec3 td = refract(dir, -nq, nl);
@@ -1796,6 +1790,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         dir = reflect(dir, -nq); pos = q - nq*0.0012;
         if (thr < 0.02) break;
       }
+      gLost += thr/float(K);
+      // light still trapped after the last bounce would keep reflecting and leave somewhere: give it the surroundings it is
+      // heading into instead of dropping it to black (this was the source of the dark blotches on detailed logos)
+      if (thr > 0.02) L += thr*trans*(scene(projUv(pos + dir*uBgDepth)) + env(dir)*uEnvThrough);
       acc += L*w; wsum += w;
     }
     return col + acc/max(wsum, vec3(0.1));
@@ -1832,6 +1830,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       c = uMaterial == 0 ? shadeGlass(p, n, rd) : shadeChrome(p, n, rd);
       if (uDebug == 1) c = n*0.5+0.5;
       if (uDebug == 2) c = vec3(fract(p.z*40.0), mapB(p)*500.0+0.5, -mapB(p)*500.0);
+      if (uDebug == 3) c = vec3(gLost, 0.0, 0.0) * 4.0; // red = light dropped (rendered black)
       cov = 1.0;
     }
     vec4 cur = vec4(min(c, vec3(48.0)), cov);
@@ -2113,7 +2112,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   }
 
   // ───────────────────────────────────────── engine
-  class SpectraEngine {
+  class RefractEngine {
     constructor(canvas) {
       this.canvas = canvas;
       const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
@@ -2636,7 +2635,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     }
     /** Seamless loop: the light sweeps across the logo and back over `seconds`. */
     async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
-      if (!SpectraEngine.canRenderVideo) throw new Error('This browser cannot encode MP4.');
+      if (!RefractEngine.canRenderVideo) throw new Error('This browser cannot encode MP4.');
       if (this.busy) throw new Error('A render is already running.');
       const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2; const M = await this._muxer();
       let config = null;
@@ -2665,15 +2664,15 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       } finally { try { enc.close(); } catch (e) { /* closed */ } this._free(P); this.busy = false; this._dirty = true; }
     }
   }
-  SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
-  SpectraEngine.version = 2;
-  SpectraEngine._toneMap = toneMapJS; SpectraEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
-  window.SpectraEngine = SpectraEngine;
+  RefractEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
+  RefractEngine.version = 2;
+  RefractEngine._toneMap = toneMapJS; RefractEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
+  window.RefractEngine = RefractEngine;
 })();
 
 ;
-/* Spectra — src/mesh.js
- * window.SpectraMesh : turn the logo on screen into a real triangle mesh, and write GLB / STL files.
+/* Refract — src/mesh.js
+ * window.RefractMesh : turn the logo on screen into a real triangle mesh, and write GLB / STL files.
  *
  * Ground truth is the engine's CPU beam tracer (engine.beam, "identical to the shader's extrude()"):
  *   sdf(x,y,z) = roundedRect2D( d2(x,y), |z| ; half-height hz(x,y), corner radius r(x,y) )
@@ -2705,7 +2704,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   /* =====================================================================================
    * Mesh core — self-contained (stringified into a worker). Returns buildMesh outside a worker.
    * ===================================================================================== */
-  function spectraMeshCore() {
+  function refractMeshCore() {
     'use strict';
     var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
     var now = function () { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); };
@@ -2890,7 +2889,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         CB[j * Nx + i] = (BN[a0 + 1] === b0 && BN[a0 + NX] === b0 && BN[a0 + NX + 1] === b0) ? b0 : -1;
         if (CB[j * Nx + i] !== 0) anyInside = true;
       }
-      if (!anyInside) throw new Error('SpectraMesh: the shape is empty');
+      if (!anyInside) throw new Error('RefractMesh: the shape is empty');
       var LMAX = Math.round(Math.log2(maxB)), M = [null];
       var zOkBlock = function (i0, j0, B) {
         var c00 = Z[j0 * NX + i0], c10 = Z[j0 * NX + i0 + B], c01 = Z[(j0 + B) * NX + i0], c11 = Z[(j0 + B) * NX + i0 + B];
@@ -3132,7 +3131,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   var localBuild = null;
   function sourceOf(engine) {
     var b = engine && (engine.beam || engine);
-    if (!b || !b.ok || !b.R || !b.G || !b.sh || !b.s) throw new Error('SpectraMesh: no shape loaded yet');
+    if (!b || !b.ok || !b.R || !b.G || !b.sh || !b.s) throw new Error('RefractMesh: no shape loaded yet');
     return { R: b.R, G: b.G, size: b.s, shape: { depth: b.sh.depth, bevel: b.sh.bevel, inflate: b.sh.inflate, inset: b.sh.inset }, extent: [b.ext[0], b.ext[1]] };
   }
   function abortErr() { var e = new Error('Export cancelled'); e.name = 'AbortError'; return e; }
@@ -3151,7 +3150,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       return new Promise(function (resolve, reject) {
         setTimeout(function () { // let the UI paint its busy state first
           if (signal && signal.aborted) { reject(abortErr()); return; }
-          try { if (!localBuild) localBuild = spectraMeshCore(); resolve(localBuild(job, onP)); } catch (e) { reject(e); }
+          try { if (!localBuild) localBuild = refractMeshCore(); resolve(localBuild(job, onP)); } catch (e) { reject(e); }
         }, 30);
       });
     };
@@ -3159,7 +3158,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     return new Promise(function (resolve, reject) {
       var w, url;
       try {
-        url = URL.createObjectURL(new Blob(['(' + spectraMeshCore.toString() + ')();'], { type: 'text/javascript' }));
+        url = URL.createObjectURL(new Blob(['(' + refractMeshCore.toString() + ')();'], { type: 'text/javascript' }));
         w = new Worker(url);
       } catch (e) { if (url) URL.revokeObjectURL(url); runLocal().then(resolve, reject); return; }
       var done = false;
@@ -3188,7 +3187,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   /** glTF 2.0 binary. Metres, +Y up, logo facing +Z, centred, longest side = size (default 0.2 m). */
   function toGLB(mesh, opts) {
     opts = opts || {};
-    var name = String(opts.name || 'Spectra logo').slice(0, 80);
+    var name = String(opts.name || 'Refract logo').slice(0, 80);
     var size = opts.size || 0.2, material = opts.material === 'chrome' ? 'chrome' : 'glass';
     var src = mesh.positions, nV = src.length / 3, bb = bounds(src);
     var c = [(bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2];
@@ -3201,7 +3200,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     var offPos = 0, offNrm = pad4(pos.byteLength), offIdx = offNrm + pad4(nrm.byteLength), binLen = pad4(offIdx + ind.byteLength);
     var thickness = (bb.max[2] - bb.min[2]) * k;
     var mat = material === 'glass' ? {
-      name: 'Spectra glass',
+      name: 'Refract glass',
       pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 0.02 },
       extensions: {
         KHR_materials_transmission: { transmissionFactor: 1 },
@@ -3210,11 +3209,11 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         KHR_materials_dispersion: { dispersion: 1 } // 20/Abbe: Abbe ≈ 20, a strong flint — visible fringes like the on-screen fan
       }
     } : {
-      name: 'Spectra chrome',
+      name: 'Refract chrome',
       pbrMetallicRoughness: { baseColorFactor: [0.96, 0.96, 0.97, 1], metallicFactor: 1, roughnessFactor: 0.05 }
     };
     var json = {
-      asset: { version: '2.0', generator: 'Spectra (spectra mesh export)' },
+      asset: { version: '2.0', generator: 'Refract (refract mesh export)' },
       extensionsUsed: material === 'glass' ? ['KHR_materials_transmission', 'KHR_materials_ior', 'KHR_materials_volume', 'KHR_materials_dispersion'] : undefined,
       scene: 0,
       scenes: [{ name: name, nodes: [0] }],
@@ -3254,7 +3253,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     var c = [(bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2];
     var k = size / Math.max(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], 1e-9);
     var nT = I.length / 3, out = new Uint8Array(84 + nT * 50), dv = new DataView(out.buffer);
-    var head = utf8(('Spectra STL ' + String(opts.name || '')).slice(0, 79));
+    var head = utf8(('Refract STL ' + String(opts.name || '')).slice(0, 79));
     out.set(head, 0); dv.setUint32(80, nT, true);
     var X = function (i) { return (src[3 * i] - c[0]) * k; }, Y = function (i) { return (src[3 * i + 1] - c[1]) * k; }, Zf = function (i) { return (src[3 * i + 2] - bb.min[2]) * k; };
     var o = 84;
@@ -3283,14 +3282,14 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     });
   }
 
-  global.SpectraMesh = { extract: extract, toGLB: toGLB, toSTL: toSTL, export: exportFile, _core: spectraMeshCore };
+  global.RefractMesh = { extract: extract, toGLB: toGLB, toSTL: toSTL, export: exportFile, _core: refractMeshCore };
 })(typeof window !== 'undefined' ? window : this);
 
 ;
-/* Spectra v2 — src/ui2.js
- * window.SpectraUI = { init(engine, deps) }   deps = { SpectraSDF, SpectraSamples, defaultSample? }
+/* Refract v2 — src/ui2.js
+ * window.RefractUI = { init(engine, deps) }   deps = { RefractSDF, RefractSamples, defaultSample? }
  * Plain browser JS. Binds the minimal UI (wordmark, one pill, two popovers, drop frame, hint, toast)
- * to the SpectraEngine v2 API. The boot script owns engine creation and resize.
+ * to the RefractEngine v2 API. The boot script owns engine creation and resize.
  */
 (function (global) {
   'use strict';
@@ -3302,19 +3301,19 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 
   function init(engine, deps) {
     deps = deps || {};
-    const root = $('#sp-root'), ui = $('#sp-ui'), canvas = $('#spectra-canvas');
-    const pill = $('#sp-pill'), dock = $('#sp-dock'), seg = $('#sp-seg'), ind = $('#sp-seg-ind');
-    const btnLogo = $('#sp-logo'), btnExport = $('#sp-export'), btnLight = $('#sp-light');
-    const popLogo = $('#sp-pop-logo'), popExport = $('#sp-pop-export'), popLight = $('#sp-pop-light');
-    const hint = $('#sp-hint');
-    const Engine = global.SpectraEngine || (engine && engine.constructor) || {};
-    const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Spectra UI] engine.' + name, e); } };
+    const root = $('#rf-root'), ui = $('#rf-ui'), canvas = $('#refract-canvas');
+    const pill = $('#rf-pill'), dock = $('#rf-dock'), seg = $('#rf-seg'), ind = $('#rf-seg-ind');
+    const btnLogo = $('#rf-logo'), btnExport = $('#rf-export'), btnLight = $('#rf-light');
+    const popLogo = $('#rf-pop-logo'), popExport = $('#rf-pop-export'), popLight = $('#rf-pop-light');
+    const hint = $('#rf-hint');
+    const Engine = global.RefractEngine || (engine && engine.constructor) || {};
+    const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Refract UI] engine.' + name, e); } };
 
     let material = 'glass', uiHidden = false, paused = false;
     let buildToken = 0, activeSample = null, exporting = null, logoName = '';
 
     /* ───── toast ───── */
-    const toastEl = $('#sp-toast'); let toastT = 0;
+    const toastEl = $('#rf-toast'); let toastT = 0;
     function toast(msg, kind, ms) {
       toastEl.textContent = msg;
       toastEl.classList.toggle('is-err', kind === 'err');
@@ -3402,7 +3401,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         el.addEventListener('dblclick', () => { el.value = key === 'thickness' ? 50 : 65; el.dispatchEvent(new Event('input')); });
         paint();
       };
-      bind('sp-thick', 'thickness'); bind('sp-round', 'roundness');
+      bind('rf-thick', 'thickness'); bind('rf-round', 'roundness');
     })();
     /* ───── light mode & background ───── */
     function pick(attr, val) { $$('button[data-' + attr + ']', popLight).forEach((b) => b.setAttribute('aria-checked', String(b.dataset[attr] === val))); }
@@ -3434,11 +3433,11 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
       } catch (e) { return null; }
     }
-    const samples = deps.SpectraSamples || global.SpectraSamples || [];
-    const sampleRow = $('#sp-samples');
+    const samples = deps.RefractSamples || global.RefractSamples || [];
+    const sampleRow = $('#rf-samples');
     samples.forEach((s, i) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'sp-smp'; b.dataset.sid = s.id || String(i);
+      b.type = 'button'; b.className = 'rf-smp'; b.dataset.sid = s.id || String(i);
       b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', s.name || 'Sample ' + (i + 1)); b.title = s.name || '';
       const url = whiteSvgURL(s.svg);
       if (url) { const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = url; b.appendChild(img); }
@@ -3446,7 +3445,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       sampleRow.appendChild(b);
     });
     function markSample(sid, busy) {
-      $$('.sp-smp', sampleRow).forEach((b) => {
+      $$('.rf-smp', sampleRow).forEach((b) => {
         const on = sid != null && b.dataset.sid === sid;
         b.setAttribute('aria-pressed', String(on)); b.classList.toggle('is-busy', !!busy && on);
       });
@@ -3458,7 +3457,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     }
     async function buildField(source, opts) {
       opts = opts || {};
-      const SDF = deps.SpectraSDF || global.SpectraSDF;
+      const SDF = deps.RefractSDF || global.RefractSDF;
       if (!SDF || typeof SDF.build !== 'function') { toast('Shape builder isn’t available', 'err'); return; }
       const token = ++buildToken;
       btnLogo.classList.add('is-busy');
@@ -3470,7 +3469,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         logoName = opts.name || '';
         if (opts.done) toast(opts.done);
       } catch (e) {
-        console.error('[Spectra UI] build failed', e);
+        console.error('[Refract UI] build failed', e);
         if (token !== buildToken) return;
         markSample(activeSample, false);
         toast(opts.fail || 'Couldn’t read that shape. Try an SVG, or a PNG with transparency.', 'err', 4200);
@@ -3494,10 +3493,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       }
       return buildField({ type: 'image', blob: file }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
     }
-    const fileIn = $('#sp-file');
-    $('#sp-pick').addEventListener('click', () => fileIn.click());
+    const fileIn = $('#rf-file');
+    $('#rf-pick').addEventListener('click', () => fileIn.click());
     fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; loadFile(f); });
-    const wordForm = $('#sp-word'), wordIn = $('#sp-word-in');
+    const wordForm = $('#rf-word'), wordIn = $('#rf-word-in');
     wordForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const w = wordIn.value.trim(); if (!w) return;
@@ -3507,7 +3506,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     });
 
     // drag & drop anywhere
-    const dz = $('#sp-dropzone'); let depth = 0;
+    const dz = $('#rf-dropzone'); let depth = 0;
     const hasFiles = (e) => e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0;
     window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; dz.classList.add('is-on'); });
     window.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
@@ -3543,10 +3542,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     }
 
     /* ───── export ───── */
-    const xpPng = $('#sp-xp-png'), xpMp4 = $('#sp-xp-mp4'), mp4Wrap = $('#sp-xp-mp4-wrap');
-    const prog = $('#sp-prog'), progFill = $('#sp-prog-fill'), progPct = $('#sp-prog-pct'), progLabel = $('#sp-prog-label');
-    const xp3d = $('#sp-xp-3d'), xpGlb = $('#sp-xp-glb'), xpStl = $('#sp-xp-stl');
-    const Mesh = deps.SpectraMesh || global.SpectraMesh || null;
+    const xpPng = $('#rf-xp-png'), xpMp4 = $('#rf-xp-mp4'), mp4Wrap = $('#rf-xp-mp4-wrap');
+    const prog = $('#rf-prog'), progFill = $('#rf-prog-fill'), progPct = $('#rf-prog-pct'), progLabel = $('#rf-prog-label');
+    const xp3d = $('#rf-xp-3d'), xpGlb = $('#rf-xp-glb'), xpStl = $('#rf-xp-stl');
+    const Mesh = deps.RefractMesh || global.RefractMesh || null;
     let meshAbort = null;
     const canVideo = () => { try { return !!Engine.canRenderVideo; } catch (e) { return false; } };
     function viewSize() { return [Math.max(1, canvas.clientWidth || window.innerWidth), Math.max(1, canvas.clientHeight || window.innerHeight)]; }
@@ -3555,8 +3554,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     function stamp() { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); }
     function refreshExport() {
       const p = pngSize(), v = videoSize();
-      $('#sp-xp-png-s').textContent = p[0] + '×' + p[1];
-      $('#sp-xp-mp4-s').textContent = v[0] + '×' + v[1] + ', 6s';
+      $('#rf-xp-png-s').textContent = p[0] + '×' + p[1];
+      $('#rf-xp-mp4-s').textContent = v[0] + '×' + v[1] + ', 6s';
       mp4Wrap.hidden = !canVideo();
       xpPng.disabled = !!exporting; xpMp4.disabled = !!exporting;
       xp3d.hidden = !Mesh;
@@ -3568,7 +3567,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       f = clamp(f || 0, 0, 1);
       progFill.style.setProperty('--p', f.toFixed(4));
       progPct.textContent = Math.round(f * 100) + '%';
-      prog.querySelector('.sp-prog-bar').setAttribute('aria-valuenow', String(Math.round(f * 100)));
+      prog.querySelector('.rf-prog-bar').setAttribute('aria-valuenow', String(Math.round(f * 100)));
       if (label) progLabel.textContent = label;
     }
     const isAbort = (e) => e && (e.name === 'AbortError' || /cancel|abort/i.test(e.message || ''));
@@ -3576,29 +3575,29 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       if (exporting) return;
       exporting = 'png'; refreshExport();
       const s = pngSize();
-      const old = xpPng.querySelector('.sp-row-s').textContent;
+      const old = xpPng.querySelector('.rf-row-s').textContent;
       try {
-        const blob = await engine.renderStill({ width: s[0], height: s[1], onProgress: (f) => { if (typeof f === 'number') xpPng.querySelector('.sp-row-s').textContent = Math.round(clamp(f, 0, 1) * 100) + '%'; } });
+        const blob = await engine.renderStill({ width: s[0], height: s[1], onProgress: (f) => { if (typeof f === 'number') xpPng.querySelector('.rf-row-s').textContent = Math.round(clamp(f, 0, 1) * 100) + '%'; } });
         if (!blob) throw new Error('empty');
-        close(); await saveBlob(blob, 'spectra-' + stamp() + '.png');
+        close(); await saveBlob(blob, 'refract-' + stamp() + '.png');
       } catch (e) {
-        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] renderStill', e); toast('PNG export failed', 'err'); }
-      } finally { exporting = null; xpPng.querySelector('.sp-row-s').textContent = old; refreshExport(); }
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Refract UI] renderStill', e); toast('PNG export failed', 'err'); }
+      } finally { exporting = null; xpPng.querySelector('.rf-row-s').textContent = old; refreshExport(); }
     });
     xpMp4.addEventListener('click', async () => {
       if (exporting || !canVideo()) return;
       exporting = 'mp4'; refreshExport();
       const v = videoSize();
       xpMp4.hidden = true; prog.hidden = false; setProg(0, 'Rendering loop');
-      $('#sp-cancel').focus();
+      $('#rf-cancel').focus();
       try {
         const blob = await engine.renderVideo({ width: v[0], height: v[1], fps: 30, seconds: 6, onProgress: (f) => setProg(typeof f === 'number' ? f : (f && f.progress) || 0) });
         if (!blob) throw new Error('empty');
         setProg(1, 'Saving');
-        await saveBlob(blob, 'spectra-loop-' + stamp() + '.mp4');
+        await saveBlob(blob, 'refract-loop-' + stamp() + '.mp4');
         close();
       } catch (e) {
-        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] renderVideo', e); toast('MP4 export failed', 'err'); }
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Refract UI] renderVideo', e); toast('MP4 export failed', 'err'); }
       } finally {
         exporting = null; prog.hidden = true; xpMp4.hidden = false; refreshExport();
       }
@@ -3610,23 +3609,23 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       exporting = format; refreshExport();
       const home = prog.parentNode, label = format === 'glb' ? 'Building GLB' : 'Building STL';
       wrap.appendChild(prog); btn.hidden = true; prog.hidden = false; setProg(0, high ? label + ' · fine' : label);
-      $('#sp-cancel').focus();
+      $('#rf-cancel').focus();
       const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null; meshAbort = ctl;
       try {
-        const r = await Mesh.export(engine, format, { quality: high ? 'high' : 'standard', name: logoName || 'Spectra logo', material, signal: ctl && ctl.signal, onProgress: (f) => setProg(f * 0.96) });
+        const r = await Mesh.export(engine, format, { quality: high ? 'high' : 'standard', name: logoName || 'Refract logo', material, signal: ctl && ctl.signal, onProgress: (f) => setProg(f * 0.96) });
         setProg(1, 'Saving');
         const blob = new Blob([r.bytes], { type: r.mime });
-        await saveBlob(blob, 'spectra-' + slug(logoName) + '-' + stamp() + '.' + r.ext);
+        await saveBlob(blob, 'refract-' + slug(logoName) + '-' + stamp() + '.' + r.ext);
         close();
       } catch (e) {
-        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] mesh export', e); toast(format.toUpperCase() + ' export failed', 'err'); }
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Refract UI] mesh export', e); toast(format.toUpperCase() + ' export failed', 'err'); }
       } finally {
         meshAbort = null; exporting = null; prog.hidden = true; btn.hidden = false; home.appendChild(prog); refreshExport();
       }
     }
-    xpGlb.addEventListener('click', (e) => exportMesh('glb', xpGlb, $('#sp-xp-glb-wrap'), e.shiftKey));
-    xpStl.addEventListener('click', (e) => exportMesh('stl', xpStl, $('#sp-xp-stl-wrap'), e.shiftKey));
-    $('#sp-cancel').addEventListener('click', () => { if (meshAbort) meshAbort.abort(); else call('cancelRender'); });
+    xpGlb.addEventListener('click', (e) => exportMesh('glb', xpGlb, $('#rf-xp-glb-wrap'), e.shiftKey));
+    xpStl.addEventListener('click', (e) => exportMesh('stl', xpStl, $('#rf-xp-stl-wrap'), e.shiftKey));
+    $('#rf-cancel').addEventListener('click', () => { if (meshAbort) meshAbort.abort(); else call('cancelRender'); });
 
     /* ───── pointer → engine ───── */
     let hinted = false, drag = null;
@@ -3692,7 +3691,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 
     /* ───── engine events ───── */
     if (engine && typeof engine.on === 'function') {
-      engine.on('error', (e) => { console.error('[Spectra UI] engine error', e); toast((e && e.message) || 'Rendering error', 'err', 4200); });
+      engine.on('error', (e) => { console.error('[Refract UI] engine error', e); toast((e && e.message) || 'Rendering error', 'err', 4200); });
       engine.on('ready', () => ui.classList.add('is-in'));
     }
 
@@ -3712,26 +3711,26 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     return { toast, setMaterial, loadFile, loadSample, close, hide: setHidden };
   }
 
-  global.SpectraUI = { init };
+  global.RefractUI = { init };
 })(typeof window !== 'undefined' ? window : this);
 
 
 (function(){
   function fail(msg){
-    var el = document.createElement('div'); el.className = 'spectra-fatal';
+    var el = document.createElement('div'); el.className = 'refract-fatal';
     el.setAttribute('role','alert');
-    el.innerHTML = '<strong>Spectra needs WebGL2</strong><span>' + msg + '</span>';
+    el.innerHTML = '<strong>Refract needs WebGL2</strong><span>' + msg + '</span>';
     document.body.appendChild(el);
   }
   function start(){
-    var canvas = document.getElementById('spectra-canvas');
+    var canvas = document.getElementById('refract-canvas');
     var engine;
-    try { engine = new SpectraEngine(canvas); }
+    try { engine = new RefractEngine(canvas); }
     catch (e) { console.error(e); fail(String(e && e.message || e)); return; }
-    window.spectra = engine;
+    window.refract = engine;
     var ro = new ResizeObserver(function(){ engine.resize(); }); ro.observe(canvas);
     window.addEventListener('resize', function(){ engine.resize(); });
-    try { SpectraUI.init(engine, { SpectraSDF: window.SpectraSDF, SpectraSamples: window.SpectraSamples, defaultSample: 'spark' }); }
+    try { RefractUI.init(engine, { RefractSDF: window.RefractSDF, RefractSamples: window.RefractSamples, defaultSample: 'hermes' }); }
     catch (e) { console.error(e); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();

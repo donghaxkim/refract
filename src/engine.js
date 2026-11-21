@@ -1,4 +1,4 @@
-/* Spectra engine v2 — "clean" renderer.
+/* Refract engine v2 — "clean" renderer.
  * Your logo is the prism: a white light beam (CPU-traced through the logo's 2D distance field, 48
  * wavelengths × 9 slices) enters, refracts, and leaves as a continuous rainbow fan. The logo itself is
  * an analytically extruded SDF, raymarched deterministically: dark dielectric glass that refracts the
@@ -17,7 +17,7 @@
   // Matches vgpu's measured 'flint' preset (B = 0.0105). The old stylised B = 0.065 was ~6× real flint: a 26° fan through
   // a 60° prism instead of ~5°, which swamped how each shape actually bends light.
   // The BEAM uses vgpu's 'stylised' spectral material, n(λ) = 1.2 + 0.1/λ² (λ in µm), traced with exact Snell + Fresnel:
-  // a gentle bend with a wide, clean fan. Written here in Spectra's form n_d + B(1/λ² − 1/λd²).
+  // a gentle bend with a wide, clean fan. Written here in Refract's form n_d + B(1/λ² − 1/λd²).
   const IOR = 1.2 + 0.1 / (0.5876 * 0.5876), CAUCHY_B = 0.07; // vgpu's 0.1 eased slightly: arbitrary logos (not a clean prism) otherwise split into many crossing fans
   // The GLASS itself is shaded as clear glass (≈ crown) with only a hint of dispersion: as on vgpu.sh, the colour lives
   // in the beam, not smeared through the glass.
@@ -239,6 +239,7 @@
     float lum = dot(R, vec3(0.2126,0.7152,0.0722));
     return R*smoothstep(0.6, 2.4, lum)*0.22*(0.65+0.35*pow(1.0-ci,1.5));
   }
+  float gLost = 0.0; // debug 3: share of the light still trapped inside the glass when tracing gives up
   vec3 shadeGlass(vec3 p, vec3 n, vec3 rd){
     float ci = clamp(-dot(rd,n),0.0,1.0);
     float F = fresnel(ci, 1.0, uIor);
@@ -251,7 +252,7 @@
       vec3 w = specW(lam); float nl = iorAt(lam);
       vec3 dir = refract(rd, n, 1.0/nl);
       vec3 pos = p - n*0.0012; float thr = 1.0-F; vec3 L = vec3(0.0); vec3 trans = vec3(1.0);
-      for (int b=0;b<2;b++){
+      for (int b=0;b<4;b++){ // follow light through up to 4 internal bounces (was 2: thin shapes lost most of it)
         float tl = marchIn(pos, dir); vec3 q = pos + dir*tl; vec3 nq = normalAt(q);
         trans *= exp(-uAbsorb*tl);
         vec3 td = refract(dir, -nq, nl);
@@ -264,6 +265,10 @@
         dir = reflect(dir, -nq); pos = q - nq*0.0012;
         if (thr < 0.02) break;
       }
+      gLost += thr/float(K);
+      // light still trapped after the last bounce would keep reflecting and leave somewhere: give it the surroundings it is
+      // heading into instead of dropping it to black (this was the source of the dark blotches on detailed logos)
+      if (thr > 0.02) L += thr*trans*(scene(projUv(pos + dir*uBgDepth)) + env(dir)*uEnvThrough);
       acc += L*w; wsum += w;
     }
     return col + acc/max(wsum, vec3(0.1));
@@ -300,6 +305,7 @@
       c = uMaterial == 0 ? shadeGlass(p, n, rd) : shadeChrome(p, n, rd);
       if (uDebug == 1) c = n*0.5+0.5;
       if (uDebug == 2) c = vec3(fract(p.z*40.0), mapB(p)*500.0+0.5, -mapB(p)*500.0);
+      if (uDebug == 3) c = vec3(gLost, 0.0, 0.0) * 4.0; // red = light dropped (rendered black)
       cov = 1.0;
     }
     vec4 cur = vec4(min(c, vec3(48.0)), cov);
@@ -581,7 +587,7 @@
   }
 
   // ───────────────────────────────────────── engine
-  class SpectraEngine {
+  class RefractEngine {
     constructor(canvas) {
       this.canvas = canvas;
       const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
@@ -1104,7 +1110,7 @@
     }
     /** Seamless loop: the light sweeps across the logo and back over `seconds`. */
     async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
-      if (!SpectraEngine.canRenderVideo) throw new Error('This browser cannot encode MP4.');
+      if (!RefractEngine.canRenderVideo) throw new Error('This browser cannot encode MP4.');
       if (this.busy) throw new Error('A render is already running.');
       const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2; const M = await this._muxer();
       let config = null;
@@ -1133,8 +1139,8 @@
       } finally { try { enc.close(); } catch (e) { /* closed */ } this._free(P); this.busy = false; this._dirty = true; }
     }
   }
-  SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
-  SpectraEngine.version = 2;
-  SpectraEngine._toneMap = toneMapJS; SpectraEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
-  window.SpectraEngine = SpectraEngine;
+  RefractEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
+  RefractEngine.version = 2;
+  RefractEngine._toneMap = toneMapJS; RefractEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
+  window.RefractEngine = RefractEngine;
 })();

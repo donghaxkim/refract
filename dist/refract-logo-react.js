@@ -1,13 +1,13 @@
-// <SpectraLogo /> — thin React wrapper around the <spectra-logo> custom element.
+// <RefractLogo /> — thin React wrapper around the <refract-logo> custom element.
 // React is a peer dependency (imported, never bundled). Works with React 17/18/19.
-//   import { SpectraLogo } from './spectra-logo-react.js';
-//   <SpectraLogo sample="spark" material="glass" background="#0b0b0c" onReady={...} style={{ height: 480 }} />
+//   import { RefractLogo } from './refract-logo-react.js';
+//   <RefractLogo sample="hermes" material="glass" background="#0b0b0c" onReady={...} style={{ height: 480 }} />
 import { createElement, forwardRef, useEffect, useRef, useImperativeHandle } from 'react';
-import './spectra-logo.js'; // registers <spectra-logo> (no-op during SSR)
+import './refract-logo.js'; // registers <refract-logo> (no-op during SSR)
 
 const STRING_PROPS = ['src', 'text', 'sample', 'font', 'material', 'light', 'theme', 'background', 'poster', 'alt'];
 
-export const SpectraLogo = forwardRef(function SpectraLogo(props, ref) {
+export const RefractLogo = forwardRef(function RefractLogo(props, ref) {
   const { className, style, id, interactive, transparent, thickness, roundness, onReady, onError, children, ...rest } = props;
   const el = useRef(null);
   useImperativeHandle(ref, () => el.current, []);
@@ -29,7 +29,7 @@ export const SpectraLogo = forwardRef(function SpectraLogo(props, ref) {
   if (interactive === false) attrs.interactive = 'false';
   if (transparent) attrs.transparent = '';
   for (const k in rest) if (!STRING_PROPS.includes(k) && (/^(aria-|data-)/.test(k) || k === 'hidden' || k === 'title')) attrs[k] = rest[k];
-  return createElement('spectra-logo', attrs, children);
+  return createElement('refract-logo', attrs, children);
 });
 
-export default SpectraLogo;
+export default RefractLogo;

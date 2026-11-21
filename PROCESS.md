@@ -1,9 +1,9 @@
-# Spectra: how it was built
+# Refract: how it was built
 
-How a "what should I make for my lab page?" question became **Spectra**: a web tool that turns any logo into glass or chrome, with a beam of light that splits into a rainbow through it. This covers every stage from the first idea to the current build, including the wrong turns and what fixed them.
+How a "what should I make for my lab page?" question became **Refract**: a web tool that turns any logo into glass or chrome, with a beam of light that splits into a rainbow through it. This covers every stage from the first idea to the current build, including the wrong turns and what fixed them.
 
 - **Live:** https://claude.ai/artifact/NTMMq9XHdP8bnHaW44CqKD
-- **Standalone file:** `spectra.html` (one self-contained HTML file, no build step)
+- **Standalone file:** `refract.html` (one self-contained HTML file, no build step)
 
 ---
 
