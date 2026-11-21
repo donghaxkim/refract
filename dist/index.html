@@ -2609,6 +2609,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     _resizeMain() { const [w, h] = this._internal(); if (this.main.scene && this.main.w === w && this.main.h === h) return; this._free(this.main); this.main = this._pipe(w, h); this._dirty = true; }
     _applyLook() {
       const gl = this.gl, L = LOOKS[this.material], u = this.p.glass.u, fi = this.fi;
+      this._lookGen = (this._lookGen || 0) + 1; // shape / material / source / logo changed (rest pose cache)
       gl.useProgram(this.p.glass.p);
       gl.uniform1i(u.uMaterial, this.material === 'glass' ? 0 : 1);
       gl.uniform1f(u.uIor, IOR);
@@ -2655,26 +2656,56 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const o = [perp[0] * off - dir[0] * 6, perp[1] * off - dir[1] * 6, 0];
       return { o, dir, perp };
     }
-    /** Pick the line through the logo whose exit spectrum is widest (hollow / symmetric logos cancel dispersion). */
-    _bestOffset(ang, R) {
-      if (!this.beam.ok || this.material === 'chrome') return 0.06;
-      let best = 0.06, bestScore = -1; const lo = this._src.lo, hi = this._src.hi; // probe the source's own wavelength span
+    /** Score every line through the logo (fixed grid of offsets) by how widely it splits the source's span: { offs, scores }.
+     *  -Infinity = no single coherent route for all colours. */
+    _routeScan(ang, R) {
+      const lo = this._src.lo, hi = this._src.hi; // probe the source's own wavelength span
       const ext = Math.max(this.fi.extent[0], this.fi.extent[1]);
       const last = (P) => { const a = P[P.length - 1], b = P[P.length - 2]; return norm3([a[0] - b[0], a[1] - b[1], a[2] - b[2]]); };
-      const cur = this._bestOff; let curScore = -1;
-      for (let o = -ext * 0.85; o <= ext * 0.85 + 1e-6; o += ext * 0.05) {
+      const offs = [], scores = [];
+      for (let i = 0; i <= 34; i++) {
+        const o = -ext * 0.85 + i * ext * 0.05; offs.push(o); scores.push(-Infinity);
         const { o: org, dir } = this._beamRays(ang, o);
         const a = this.beam.trace(org, dir, lo, false, R); if (a.length < 4) continue;
         const b = this.beam.trace(org, dir, hi, false, R); if (b.length !== a.length) continue;
         const m = this.beam.trace(org, dir, (lo + hi) / 2, false, R); if (m.length !== a.length) continue; // one coherent route for all colours
         const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1));
         const e = Math.min(a[a.length - 1][5], b[b.length - 1][5]);
-        const score = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
-        if (score > bestScore) { bestScore = score; best = o; }
-        if (cur != null && Math.abs(o - cur) < ext * 0.051) curScore = Math.max(curScore, score);
+        scores[i] = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
       }
-      if (cur != null && curScore > 0.002 && bestScore < curScore + 0.02) return cur; // hysteresis: don't hop between near-equal lines
-      return bestScore > 0.002 ? best : 0.06;
+      return { offs, scores, ext };
+    }
+    /** Best line of a scan; with hysteresis against `cur` (kept while cur itself is still a good, coherent line). 0.06 = none. */
+    _pickRoute(S, cur) {
+      let bi = -1, bestScore = -1;
+      S.scores.forEach((v, i) => { if (v > bestScore) { bestScore = v; bi = i; } });
+      if (cur != null) { const i = Math.round((cur - S.offs[0]) / (S.ext * 0.05));
+        const curScore = i >= 0 && i < S.offs.length && Math.abs(S.offs[i] - cur) < S.ext * 0.01 ? S.scores[i] : -1;
+        if (curScore > 0.002 && bestScore < curScore + 0.02) return S.offs[i]; } // hysteresis: don't hop between near-equal lines
+      return bestScore > 0.002 ? S.offs[bi] : 0.06;
+    }
+    /** Pick the line through the logo whose exit spectrum is widest (hollow / symmetric logos cancel dispersion). */
+    _bestOffset(ang, R, cur = this._bestOff) {
+      if (!this.beam.ok || this.material === 'chrome') return 0.06;
+      return this._pickRoute(this._routeScan(ang, R), cur);
+    }
+    /** Idle resting aim: _restAng (light from the upper left) unless no line through this logo splits the light there; then its
+     *  mirror (lower left, the original rest), then the nearest angle that does. Cached per look / logo / spin. */
+    _restPose() {
+      const pref = this._restAng; if (!this.beam.ok || this.material === 'chrome' || !this.field) return pref;
+      const r = this.rot; if (this._restC && (r.drag || r.vy || r.vp)) return this._restC.ang; // still spinning: keep the last choice
+      const key = [this._lookGen, this.field.size, pref, r.yaw.toFixed(2), r.pitch.toFixed(2)].join('|');
+      if (this._restC && this._restC.key === key) return this._restC.ang;
+      const R = rotYX(r.yaw, r.pitch), good = (a) => Math.max(...this._routeScan(a, R).scores), TH = 0.01;
+      let ang = pref;
+      if (good(pref) < TH) {
+        const mir = -pref; let bestA = pref, bestS = -1;
+        if (good(mir) >= TH) ang = mir;
+        else { search: for (const d of [0.08, 0.16, 0.24, 0.32]) for (const a of [pref + d, pref - d, mir - d, mir + d]) { // nearest first
+            const sc = good(a); if (sc > bestS + 1e-3) { bestS = sc; bestA = a; } if (sc >= TH) break search; }
+          ang = bestS > 0.002 ? bestA : pref; }
+      }
+      this._restC = { key, ang }; return ang;
     }
     _buildBeam(ang, R) {
       const mirror = this.material === 'chrome';
@@ -2912,7 +2943,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       } else if (this.time - this.lastPointerT > 3.5 && !this.paused) {
         // idle: slow seamless drift of the light (6 s period)
         // idle: glide to a calm resting pose and stop, so the image settles into a crisp still
-        this.target.ang = this._restAng; this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
+        this.target.ang = this._restPose(); this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
       }
       // critically damped follow (angles wrap)
       const k = 1 - Math.exp(-dt * 2.6); // slow, critically damped follow: elegant, no jitter
