@@ -262,7 +262,7 @@
       updateMeta();
       setState('preview'); // fit() → layoutTrim()
       drawFilm(); syncPlay();
-      dlBtn.focus({ preventScroll: true });
+      playBtn.focus({ preventScroll: true }); // not Download: activating it starts a long render (Space plays / pauses here)
     }
     recStop.addEventListener('click', stopRec);
     function updateMeta() {
@@ -423,8 +423,11 @@
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'k' || e.key === 'K') { e.preventDefault(); e.stopPropagation(); if (st.open) closeCam(true); else openCam(); return; }
       if (st.open && st.state === 'preview' && st.tl && !st.rendering && (e.key === ' ' || e.code === 'Space')) {
-        if (t && (t.tagName === 'BUTTON' || t.getAttribute('role') === 'slider') && t.matches(':focus-visible') && t.tagName === 'BUTTON') return; // Space activates a focused button
-        e.preventDefault(); e.stopPropagation(); togglePlay();
+        // Space plays / pauses the video preview. It never activates Download (that starts a full offline render: use Enter or a
+        // click); other buttons a keyboard user tabbed to (Retake, fps) keep their native Space activation.
+        if (t && t.tagName === 'BUTTON' && t !== dlBtn && t !== playBtn && t.matches(':focus-visible')) return;
+        e.preventDefault(); e.stopPropagation();
+        if (!e.repeat) togglePlay();
       }
     }, true);
 
