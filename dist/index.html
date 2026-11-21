@@ -181,6 +181,9 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 .sp-root button:disabled { cursor: default; opacity: 0.4; }
 .sp-root button.sp-row:disabled:hover, .sp-row-hit:disabled:hover { background: none; }
 
+/* 3D model rows: same rows, set off from image/video by a hairline */
+.sp-xp-3d { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--sp-line-2); }
+.sp-xp-3d[hidden] { display: none; }
 .sp-prog { padding: 10px 12px 12px; }
 .sp-prog[hidden] { display: none; }
 .sp-prog-top { display: flex; align-items: center; gap: 10px; }
@@ -321,11 +324,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
           <button type="button" class="sp-opt" role="radio" aria-checked="true" data-light="beam"><span class="sp-opt-ico sp-ico-beam" aria-hidden="true"></span><span class="sp-row-t">Beam</span></button>
           <button type="button" class="sp-opt" role="radio" aria-checked="false" data-light="studio"><span class="sp-opt-ico sp-ico-studio" aria-hidden="true"></span><span class="sp-row-t">Studio</span></button>
         </div>
-        <p class="sp-pop-label">Background</p>
-        <div class="sp-opts" role="radiogroup" aria-label="Background">
-          <button type="button" class="sp-opt" role="radio" aria-checked="true" data-theme="dark"><span class="sp-opt-ico sp-ico-dark" aria-hidden="true"></span><span class="sp-row-t">Dark</span></button>
-          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-theme="light"><span class="sp-opt-ico sp-ico-light" aria-hidden="true"></span><span class="sp-row-t">Light</span></button>
-        </div>
+        <!-- Dark/Light background removed for now: always the light background -->
       </div>
 
       <!-- Export popover -->
@@ -345,18 +344,27 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
               <span class="sp-prog-pct" id="sp-prog-pct">0%</span>
               <button type="button" class="sp-cancel" id="sp-cancel">Cancel</button>
             </div>
-            <div class="sp-prog-bar" role="progressbar" aria-label="Video render progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-prog-fill"></i></div>
+            <div class="sp-prog-bar" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-prog-fill"></i></div>
+          </div>
+        </div>
+        <div class="sp-xp-3d" id="sp-xp-3d" role="group" aria-label="3D model">
+          <div class="sp-row sp-row--video" id="sp-xp-glb-wrap">
+            <button type="button" class="sp-row-hit" id="sp-xp-glb" title="Shift-click for a finer mesh">
+              <span class="sp-row-t">GLB</span>
+              <span class="sp-row-s" id="sp-xp-glb-s">Blender · three.js</span>
+            </button>
+          </div>
+          <div class="sp-row sp-row--video" id="sp-xp-stl-wrap">
+            <button type="button" class="sp-row-hit" id="sp-xp-stl" title="Shift-click for a finer mesh">
+              <span class="sp-row-t">STL</span>
+              <span class="sp-row-s" id="sp-xp-stl-s">3D print</span>
+            </button>
           </div>
         </div>
       </div>
 
       <div class="sp-pill" id="sp-pill" role="toolbar" aria-label="Spectra controls">
-        <div class="sp-seg" id="sp-seg" role="radiogroup" aria-label="Material">
-          <span class="sp-seg-ind" id="sp-seg-ind" aria-hidden="true"></span>
-          <button type="button" role="radio" aria-checked="true" data-material="glass" aria-keyshortcuts="G">Glass</button>
-          <button type="button" role="radio" aria-checked="false" data-material="chrome" aria-keyshortcuts="C">Chrome</button>
-        </div>
-        <span class="sp-div" aria-hidden="true"></span>
+        <!-- Glass/Chrome switch removed for now (engine still supports chrome) -->
         <button type="button" class="sp-btn" id="sp-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-light">Light</button>
         <button type="button" class="sp-btn" id="sp-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-logo">Logo</button>
         <button type="button" class="sp-btn" id="sp-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-export">Export</button>
@@ -1537,9 +1545,25 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   const lerp = (a, b, t) => a + (b - a) * t;
 
   // ───────────────────────────────────────── optics constants
-  const IOR = 1.5, CAUCHY_B = 0.065;              // stylised flint: strong, clean fan
+  // Real dense flint glass (≈ Schott SF2): n_d = 1.65, Abbe ≈ 32. Cauchy n(λ) = n_d + B(1/λ² − 1/λd²), B in µm².
+  // Matches vgpu's measured 'flint' preset (B = 0.0105). The old stylised B = 0.065 was ~6× real flint: a 26° fan through
+  // a 60° prism instead of ~5°, which swamped how each shape actually bends light.
+  // The BEAM uses vgpu's 'stylised' spectral material, n(λ) = 1.2 + 0.1/λ² (λ in µm), traced with exact Snell + Fresnel:
+  // a gentle bend with a wide, clean fan. Written here in Spectra's form n_d + B(1/λ² − 1/λd²).
+  const IOR = 1.2 + 0.1 / (0.5876 * 0.5876), CAUCHY_B = 0.07; // vgpu's 0.1 eased slightly: arbitrary logos (not a clean prism) otherwise split into many crossing fans
+  // The GLASS itself is shaded as clear glass (≈ crown) with only a hint of dispersion: as on vgpu.sh, the colour lives
+  // in the beam, not smeared through the glass.
+  const GLASS_IOR = 1.52, GLASS_CAUCHY_B = 0.006;
   const iorAt = (lamNm) => { const l = lamNm * 0.001; return IOR + CAUCHY_B * (1 / (l * l) - 1 / (0.5876 * 0.5876)); };
-  const BEAM_WAVES = 56, BEAM_SLICES = 1, BEAM_WIDTH = 0.034;
+  const BEAM_WAVES = 56, BEAM_SLICES = 5, BEAM_WIDTH = 0.034;
+  // vgpu-style finite beam: the spectral fan is the additive sum of BEAM_SLICES parallel sub-beams across the beam's width,
+  // weighted by a soft Gaussian profile, so neighbouring fans overlap and blend instead of one thin line showing every ripple.
+  // Beam slicing, per-ray spectral density and the pointer mapping/easing follow the prism hero in vercel-labs/vgpu
+  // (apps/docs/.../prism-background: light-mesh.ts, interaction.ts), MIT License, Copyright (c) 2025 Vercel, Inc.
+  const BEAM_HALF = 0.05, BEAM_EDGE = 2.2;
+  const FADE_RATE = 0.9, FADE_POWER = 2.2; // after leaving the glass the rainbow dissolves smoothly instead of running off-screen
+  // vgpu interaction: pointer height swings the light along an arc, pointer width chooses where it strikes the logo.
+  const AIM_ARC = 0.85, AIM_REACH = 0.72, AIM_LERP = 0.12, ORBIT_LERP = 0.08; // lerps are per 60 Hz frame (vgpu LAMP_AIM_LERP / CAMERA_ORBIT_LERP)
 
   // CIE 1931 fit → linear sRGB (clamped), normalised so an even spread of N wavelengths sums to white
   function g1(x, mu, s1, s2) { const t = (x - mu) / (x < mu ? s1 : s2); return Math.exp(-0.5 * t * t); }
@@ -1564,9 +1588,25 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   }
   let SPEC_NORM_SHADER;
   SPEC_NORM_SHADER = specNorm(400, 700, 4000);
+  // Beam palette ported from vgpu's wavelengthToBeamRgb (MIT, Vercel): CIE 1931 colour matching (Wyman–Sloan–Shirley fit)
+  // under D65 daylight, shifted toward neutral into the sRGB gamut, one shared photographic shoulder, white-balanced.
+  // Unlike an equal-energy rainbow, greens/yellows read bright and deep violet/red fall away, so the fan looks like light.
+  const cieX = (w) => { const t1 = (w - 442) * (w < 442 ? 0.0624 : 0.0374), t2 = (w - 599.8) * (w < 599.8 ? 0.0264 : 0.0323), t3 = (w - 501.1) * (w < 501.1 ? 0.049 : 0.0382); return 0.362 * Math.exp(-0.5 * t1 * t1) + 1.056 * Math.exp(-0.5 * t2 * t2) - 0.065 * Math.exp(-0.5 * t3 * t3); };
+  const cieY = (w) => { const t1 = (w - 568.8) * (w < 568.8 ? 0.0213 : 0.0247), t2 = (w - 530.9) * (w < 530.9 ? 0.0613 : 0.0322); return 0.821 * Math.exp(-0.5 * t1 * t1) + 0.286 * Math.exp(-0.5 * t2 * t2); };
+  const cieZ = (w) => { const t1 = (w - 437) * (w < 437 ? 0.0845 : 0.0278), t2 = (w - 459) * (w < 459 ? 0.0385 : 0.0725); return 1.217 * Math.exp(-0.5 * t1 * t1) + 0.681 * Math.exp(-0.5 * t2 * t2); };
+  const D65 = [82.7549, 91.486, 93.4318, 86.6823, 104.865, 117.008, 117.812, 114.861, 115.923, 108.811, 109.354, 107.802, 104.79, 107.689, 104.405, 104.046, 100, 96.3342, 95.788, 88.6856, 90.0062, 89.5991, 87.6987, 83.2886, 83.6992, 80.0268, 80.2146, 82.2778, 78.2842, 69.7213, 71.6091];
+  function beamRgb(w) {
+    w = clamp(w, 400, 700); const x = cieX(w), y = cieY(w), z = cieZ(w);
+    const lin = [3.2406 * x - 1.5372 * y - 0.4986 * z, -0.9689 * x + 1.8758 * y + 0.0415 * z, 0.0557 * x - 0.204 * y + 1.057 * z];
+    const off = Math.min(0, ...lin), pos = lin.map(c => c - off), peak = Math.max(...pos, 1e-9);
+    const co = clamp((w - 400) / 10, 0, 30), lo = Math.min(29, Math.floor(co)), fr = co - lo, d65 = (D65[lo] * (1 - fr) + D65[lo + 1] * fr) / 100;
+    const pw = (1 - Math.exp(-4.5 * d65 * y / 1.0347)) / (1 - Math.exp(-4.5)), WB = [1.1868, 1, 2.2495];
+    return pos.map((c, i) => c / peak * pw * WB[i]);
+  }
   const BEAM_COLORS = (() => {
-    const n = specNorm(400, 700, BEAM_WAVES); const out = [];
-    for (let i = 0; i < BEAM_WAVES; i++) { const l = 400 + 300 * (i + 0.5) / BEAM_WAVES; const c = zucconi(l); out.push({ lam: l, rgb: [c[0] * n[0], c[1] * n[1], c[2] * n[2]] }); }
+    const out = [], sum = [0, 0, 0];
+    for (let i = 0; i < BEAM_WAVES; i++) { const l = 400 + 300 * (i + 0.5) / BEAM_WAVES; const c = beamRgb(l); out.push({ lam: l, rgb: c }); for (let k = 0; k < 3; k++) sum[k] += c[k]; }
+    for (const o of out) o.rgb = o.rgb.map((c, k) => c * BEAM_WAVES / sum[k]); // average 1 per channel: together exactly white
     return out;
   })();
 
@@ -1579,13 +1619,16 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   precision highp float; in vec2 vUv; out vec4 o;
   uniform vec3 uBg; uniform vec2 uRes, uCenter, uJitter; uniform int uMode;
   uniform sampler2D uField; uniform mat3 uRotT; uniform float uCamDist, uTanFov, uShadow, uEnvYaw;
+  uniform float uFlat; // embed: custom page colour; 1 = backdrop exactly uBg at the frame edge (no blue lift, no grain)
   float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
   float vn(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f);
     return mix(mix(h12(i),h12(i+vec2(1,0)),f.x), mix(h12(i+vec2(0,1)),h12(i+vec2(1,1)),f.x), f.y); }
   void main(){
     vec2 ndc = (gl_FragCoord.xy + uJitter)/uRes*2.0 - 1.0 - uCenter;
     if (uMode == 0){ vec2 q = ndc; q.x *= uRes.x/uRes.y; float g = exp(-dot(q,q)*0.7); float n = (vn(gl_FragCoord.xy*0.35) - 0.5)*0.05 + (h12(gl_FragCoord.xy) - 0.5)*0.03;
-      o = vec4(uBg*(0.95 + 0.6*g + n) + vec3(0.0006,0.0007,0.0011)*(1.0-g), 1.0); return; }
+      vec3 c0 = uBg*(0.95 + 0.6*g + n) + vec3(0.0006,0.0007,0.0011)*(1.0-g);
+      if (uFlat > 0.0){ vec2 e = 1.0 - abs(ndc + uCenter); float ef = smoothstep(0.0, 0.55, min(e.x, e.y*1.4)); c0 = uFlat > 1.5 ? uBg : mix(c0, uBg*(1.0 + (0.55*g + n*0.6)*ef), uFlat); }
+      o = vec4(c0, 1.0); return; }
     // light: a paper wall 1.3 units behind the logo, lit by a soft window from the upper left
     vec3 rd = normalize(vec3(ndc.x*(uRes.x/uRes.y)*uTanFov, ndc.y*uTanFov, -1.0));
     float t = (uCamDist + 1.3)/(-rd.z); vec3 W = vec3(0.0,0.0,uCamDist) + rd*t;
@@ -1605,6 +1648,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     sh *= uShadow > 1.2 ? 0.55 : (0.42 - 0.22*smoothstep(-0.03, -0.14, d)); // glass: lighter core, darker rim
     lit *= 1.0 - sh;
     float paper = (vn(gl_FragCoord.xy*0.35) - 0.5)*0.025 + (h12(gl_FragCoord.xy) - 0.5)*0.012;
+    if (uFlat > 0.0){ vec2 e = 1.0 - abs(ndc + uCenter); float ef = smoothstep(0.0, 0.5, min(e.x, e.y*1.4));
+      float base = 1.0 - (1.0 - min(lit/max(1.0 - sh, 1e-3), 1.0))*0.55*ef; lit = uFlat > 1.5 ? 1.0 : mix(lit, base*(1.0 - sh*ef), uFlat); paper *= mix(1.0, 0.0, min(uFlat, 1.0)); }
     o = vec4(uBg*(lit + paper), 1.0);
   }`;
 
@@ -1817,6 +1862,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   const COMPOSITE = `#version 300 es
   precision highp float; in vec2 vUv; out vec4 o;
   uniform sampler2D uAccum, uBloom; uniform float uExposure, uBloomAmt, uVignette, uFlip, uTransparent; uniform vec2 uOutRes; uniform int uHasBloom, uTone;
+  uniform float uUseGain, uBloomEdge, uFeather, uAlphaK; uniform vec3 uGain, uPage; // embed: custom background colour match; bloom fades out at the frame edge
   vec3 neutral(vec3 c){ // Khronos PBR Neutral: keeps hues and whites honest for the light theme
     float x = min(c.r, min(c.g, c.b)); float off = x < 0.08 ? x - 6.25*x*x : 0.04; c -= off;
     float peak = max(c.r, max(c.g, c.b)); const float sc = 0.76; if (peak < sc) return c;
@@ -1828,19 +1874,23 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   vec3 look(vec3 v){ float l = dot(v, vec3(0.2126,0.7152,0.0722)); v = pow(max(v,0.0), vec3(1.3)); l = pow(max(l,0.0), 1.3); return l + 1.45*(v-l); }
   vec3 agxEotf(vec3 v){ const mat3 mi = mat3(1.19687900512017,-0.0528968517574562,-0.0529716355144438, -0.0980208811401368,1.15190312990417,-0.0980434501171241, -0.0990297440797205,-0.0989611768448433,1.15107367264116);
     return pow(max(mi*v,0.0), vec3(2.2)); }
+  vec3 aces(vec3 x){ return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 0.0, 1.0); } // as vgpu.sh
   vec3 toSrgb(vec3 c){ c = clamp(c,0.0,1.0); return mix(c*12.92, 1.055*pow(c,vec3(1.0/2.4))-0.055, step(0.0031308,c)); }
   float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
   void main(){
     vec2 uv = vUv; if (uFlip > 0.5) uv.y = 1.0-uv.y;
     vec4 a = texture(uAccum, uv);
     vec3 bl = uHasBloom == 1 ? texture(uBloom, uv).rgb : vec3(0.0);
+    if (uBloomEdge > 0.0){ vec2 m = min(uv, 1.0 - uv)*vec2(uOutRes.x/uOutRes.y, 1.0); bl *= smoothstep(0.0, 0.22, min(m.x, m.y)); }
     vec3 hdr = (max(a.rgb,0.0) + bl*uBloomAmt)*uExposure;
-    vec3 c = uTone == 1 ? toSrgb(neutral(hdr)) : toSrgb(agxEotf(look(agx(hdr))));
+    vec3 c = uTone == 1 ? toSrgb(neutral(hdr)) : uTone == 2 ? toSrgb(aces(hdr)) : toSrgb(agxEotf(look(agx(hdr))));
+    if (uUseGain > 0.0) c = min(c*uGain, vec3(1.0));
+    float fe = 1.0; if (uFeather > 0.0){ vec2 m = min(uv, 1.0 - uv)*vec2(uOutRes.x/uOutRes.y, 1.0); fe = smoothstep(0.0, uFeather, min(m.x, m.y)); if (uTransparent < 0.5) c = mix(uPage, c, fe); }
     vec2 q = (uv-0.5)*vec2(uOutRes.x/uOutRes.y,1.0);
     c *= 1.0 - uVignette*smoothstep(0.3, 1.1, length(q)*1.1);
     c += (h12(gl_FragCoord.xy) - 0.5)/255.0;
     float al = 1.0;
-    if (uTransparent > 0.5){ al = clamp(max(a.a, max(c.r,max(c.g,c.b))*1.2), 0.0, 1.0); c = al > 0.0 ? c/al : c; }
+    if (uTransparent > 0.5){ float cv = clamp(a.a, 0.0, 1.0); c = mix(max(c - uPage, 0.0), c, cv); al = clamp(max(cv, max(c.r,max(c.g,c.b))*(uAlphaK > 0.0 ? uAlphaK : 1.2)), 0.0, 1.0); c = al > 0.0 ? c/al : c; al *= fe; }
     o = vec4(clamp(c,0.0,1.0), al);
   }`;
 
@@ -1877,7 +1927,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   };
 
   const THEMES = {
-    dark: { mode: 0, bg: [0.0125, 0.0125, 0.0142], tone: 0, exposure: 1, bloomK: 1, vignetteK: 0.45, beamK: 1, ambient: null, lightK: 1 },
+    dark: { mode: 0, bg: [0.0072, 0.0072, 0.0082], tone: 2, exposure: 1, bloomK: 0.9, bloomTh: 0.35, vignetteK: 0.45, beamK: 1, ambient: null, lightK: 1 },
     light: { mode: 1, bg: [0.74, 0.715, 0.675], tone: 1, exposure: 0.97, bloomK: 0.35, vignetteK: 0.35, beamK: 0.42, ambient: 0.22, lightK: 0.75 },
   };
   // ───────────────────────────────────────── small math
@@ -1947,15 +1997,29 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const b = (B[i0] * (1 - tx) + B[i0 + 1] * tx) * (1 - ty) + (B[i0 + s] * (1 - tx) + B[i0 + s + 1] * tx) * ty;
       this._db = b + o; return a + o;
     }
-    sdf(x, y, z) { // identical to the shader's extrude()
-      const sh = this.sh; const d2 = this.f(x, y), db = this._db;
+    /** Cubic B-spline sample of both channels (same filter as the shader's fieldS, which shades the visible surface). */
+    fS(x, y) {
+      const s = this.s, cx = clamp(x, -1, 1), cy = clamp(y, -1, 1);
+      const fx = (cx * 0.5 + 0.5) * s - 0.5, fy = (0.5 - cy * 0.5) * s - 0.5;
+      const ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+      const w = (t) => { const t2 = t * t, t3 = t2 * t; return [(1 - 3 * t + 3 * t2 - t3) / 6, (4 - 6 * t2 + 3 * t3) / 6, (1 + 3 * t + 3 * t2 - 3 * t3) / 6, t3 / 6]; };
+      const wx = w(tx), wy = w(ty); let a = 0, b = 0;
+      for (let j = 0; j < 4; j++) { const yy = clamp(iy - 1 + j, 0, s - 1) * s;
+        for (let i = 0; i < 4; i++) { const k = yy + clamp(ix - 1 + i, 0, s - 1), ww = wx[i] * wy[j]; a += this.R[k] * ww; b += this.G[k] * ww; } }
+      const o = Math.hypot(Math.max(Math.abs(x) - 1, 0), Math.max(Math.abs(y) - 1, 0));
+      this._db = b + o; return a + o;
+    }
+    sdfS(x, y, z) { const d2 = this.fS(x, y); return this._ext(d2, this._db, z); }
+    sdf(x, y, z) { const d2 = this.f(x, y); return this._ext(d2, this._db, z); }
+    _ext(d2, db, z) { // identical to the shader's extrude()
+      const sh = this.sh;
       let hz = sh.depth;
       if (sh.inflate > 0) { const k = clamp(-db / Math.max(sh.inset, 1e-3), 0, 1); hz *= lerp(1, 0.3 + 0.7 * (1 - (1 - k) * (1 - k)), sh.inflate); }
       const r = Math.min(sh.bevel, hz * 0.98);
       const wx = d2 + r, wy = Math.abs(z) - hz + r;
       return Math.min(Math.max(wx, wy), 0) + Math.hypot(Math.max(wx, 0), Math.max(wy, 0)) - r;
     }
-    n(x, y, z) { const h = 0.0025; const gx = this.sdf(x + h, y, z) - this.sdf(x - h, y, z), gy = this.sdf(x, y + h, z) - this.sdf(x, y - h, z), gz = this.sdf(x, y, z + h) - this.sdf(x, y, z - h); const l = Math.hypot(gx, gy, gz) || 1; return [gx / l, gy / l, gz / l]; }
+    n(x, y, z) { const h = 0.0025; const gx = this.sdfS(x + h, y, z) - this.sdfS(x - h, y, z), gy = this.sdfS(x, y + h, z) - this.sdfS(x, y - h, z), gz = this.sdfS(x, y, z + h) - this.sdfS(x, y, z - h); /* smooth normals of the surface you see */ const l = Math.hypot(gx, gy, gz) || 1; return [gx / l, gy / l, gz / l]; }
     box(o, d) { const B = [this.ext[0] + 0.04, this.ext[1] + 0.04, this.sh.depth + 0.02]; let t0 = -1e9, t1 = 1e9;
       for (let i = 0; i < 3; i++) { if (Math.abs(d[i]) < 1e-9) { if (Math.abs(o[i]) > B[i]) return null; continue; } let a = (-B[i] - o[i]) / d[i], b = (B[i] - o[i]) / d[i]; if (a > b) [a, b] = [b, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, b); }
       return t1 > Math.max(t0, 0) ? [Math.max(t0, 0), t1] : null; }
@@ -1977,6 +2041,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         if (mirror) { const dn = dot3(v, n); v = [v[0] - 2 * dn * n[0], v[1] - 2 * dn * n[1], v[2] - 2 * dn * n[2]]; p = add3(p, n, 0.003); energy *= 0.92; exited = true; since = 0; pts[pts.length - 1][5] = energy; continue; }
         let r = refract3(v, n, 1 / nl);
         if (!r) { const dn = dot3(v, n); v = [v[0] - 2 * dn * n[0], v[1] - 2 * dn * n[1], v[2] - 2 * dn * n[2]]; p = add3(p, n, 0.003); continue; }
+        energy *= fresnelT(-dot3(v, n), 1, nl); // part of the light is reflected at the surface it enters
+        if (exited) energy *= 0.35; // light re-entering another part of the logo: keep these secondary fans quiet so one clean fan reads (art direction)
         v = r; p = add3(p, n, -0.002);
         let out = false;
         for (let b = 0; b < 5; b++) {
@@ -1984,12 +2050,11 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
           p = [p[0] + v[0] * ti, p[1] + v[1] * ti, p[2] + v[2] * ti]; total += ti; push(p);
           const m = this.n(p[0], p[1], p[2]);
           const r2 = refract3(v, [-m[0], -m[1], -m[2]], nl);
-          if (r2) { v = r2; p = add3(p, m, 0.002); out = true; break; }
+          if (r2) { energy *= fresnelT(dot3(v, m), nl, 1); pts[pts.length - 1][5] = energy; v = r2; p = add3(p, m, 0.002); out = true; break; }
+          // total internal reflection is lossless: all the light carries on inside the glass
           const dn = dot3(v, m); v = [v[0] - 2 * dn * m[0], v[1] - 2 * dn * m[1], v[2] - 2 * dn * m[2]]; p = add3(p, m, -0.002);
-          energy *= 0.4; pts[pts.length - 1][5] = energy;
         }
         if (!out) return pts;
-        if (exited) { energy *= 0.55; pts[pts.length - 1][5] = energy; }
         exited = true; since = 0;
       }
       const L = 9; const end = [p[0] + v[0] * L, p[1] + v[1] * L, p[2] + v[2] * L]; if (exited) since += L; total += L; push(end);
@@ -1999,7 +2064,53 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   const smooth01 = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
   const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const add3 = (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
+  /** Exact unpolarised Fresnel transmittance (mean of s and p) for light going from n1 into n2; 0 under total internal reflection. */
+  function fresnelT(cosI, n1, n2) {
+    cosI = Math.min(1, Math.max(0, cosI)); const eta = n1 / n2, s2 = eta * eta * (1 - cosI * cosI); if (s2 >= 1) return 0;
+    const cosT = Math.sqrt(1 - s2);
+    const rs = (n1 * cosI - n2 * cosT) / (n1 * cosI + n2 * cosT), rp = (n1 * cosT - n2 * cosI) / (n1 * cosT + n2 * cosI);
+    return 1 - 0.5 * (rs * rs + rp * rp);
+  }
   function refract3(v, n, eta) { const c = -dot3(v, n); const k = 1 - eta * eta * (1 - c * c); if (k < 0) return null; const s = eta * c - Math.sqrt(k); return [eta * v[0] + s * n[0], eta * v[1] + s * n[1], eta * v[2] + s * n[2]]; }
+
+  // ───────────────────────────────────────── embed helpers: CSS colour → sRGB, tone curves (exact JS copies of COMPOSITE), inverse
+  let _cc = null;
+  function parseCssColor(str) {
+    if (!_cc) { const c = document.createElement('canvas'); c.width = c.height = 1; _cc = c.getContext('2d', { willReadFrequently: true }); }
+    _cc.clearRect(0, 0, 1, 1); _cc.fillStyle = '#000'; _cc.fillStyle = String(str); _cc.fillRect(0, 0, 1, 1);
+    const d = _cc.getImageData(0, 0, 1, 1).data; const a = d[3] / 255 || 1;
+    return [d[0] / 255 / a, d[1] / 255 / a, d[2] / 255 / a].map(v => clamp(v, 0, 1));
+  }
+  const mcm = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]]; // GLSL column-major mat3 * v
+  const AGX_M = [0.842479062253094, 0.0423282422610123, 0.0423756549057051, 0.0784335999999992, 0.878468636469772, 0.0784336, 0.0792237451477643, 0.0791661274605434, 0.879142973793104];
+  const AGX_MI = [1.19687900512017, -0.0528968517574562, -0.0529716355144438, -0.0980208811401368, 1.15190312990417, -0.0980434501171241, -0.0990297440797205, -0.0989611768448433, 1.15107367264116];
+  function toneMapJS(c, tone) {
+    let v;
+    if (tone === 2) {
+      v = c.map(x => clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0, 1));
+    } else if (tone === 1) {
+      v = c.slice(); const x = Math.min(v[0], v[1], v[2]); const off = x < 0.08 ? x - 6.25 * x * x : 0.04; v = v.map(a => a - off);
+      const peak = Math.max(v[0], v[1], v[2]); const sc = 0.76;
+      if (peak >= sc) { const d = 1 - sc, np = 1 - d * d / (peak + d - sc); v = v.map(a => a * np / peak); const g = 1 - 1 / (0.15 * (peak - np) + 1); v = v.map(a => a + (np - a) * g); }
+    } else {
+      const lo = -12.47393, hi = 4.026069;
+      v = mcm(AGX_M, c).map(a => (clamp(Math.log2(Math.max(a, 1e-10)), lo, hi) - lo) / (hi - lo));
+      v = v.map(x => { const x2 = x * x, x4 = x2 * x2; return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232; });
+      let l = 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; v = v.map(a => Math.pow(Math.max(a, 0), 1.3)); l = Math.pow(Math.max(l, 0), 1.3); v = v.map(a => l + 1.45 * (a - l));
+      v = mcm(AGX_MI, v).map(a => Math.pow(Math.max(a, 0), 2.2));
+    }
+    return v.map(a => { a = clamp(a, 0, 1); return a <= 0.0031308 ? a * 12.92 : 1.055 * Math.pow(a, 1 / 2.4) - 0.055; });
+  }
+  const srgbLin = (v) => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  /** Linear backdrop value whose tone-mapped output (at exposure ex) equals the sRGB target. */
+  function solveBackdrop(tgt, ex, tone) {
+    const tl = tgt.map(srgbLin); let x = tl.map(v => Math.max(v, 1e-5) / ex);
+    for (let i = 0; i < 80; i++) {
+      const y = toneMapJS(x.map(v => v * ex), tone).map(srgbLin);
+      x = x.map((v, k) => clamp(v * Math.pow(Math.max(tl[k], 1e-6) / Math.max(y[k], 1e-6), 0.6), 0, 64));
+    }
+    return tgt.map((v, k) => v <= 0.0005 ? 0 : x[k]);
+  }
 
   // ───────────────────────────────────────── engine
   class SpectraEngine {
@@ -2041,7 +2152,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       this.field = null; this.fi = { size: 1, extent: [0.5, 0.5], maxInset: 0.05, blurInset: 0.05 };
       this.beam = new Beam3D();
 
-      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'dark'; this.lightMode = 'beam'; this.envYaw = 0; this.envYawT = 0;
+      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'light'; this.lightMode = 'beam'; this.envYaw = 0; this.envYawT = 0;
       this.listeners = {};
       this.time = 0; this.frame = 0; this.samples = 0; this.paused = false;
       this.pointer = null; this.lastPointerT = -1e9;
@@ -2090,13 +2201,14 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     getMaterial() { return this.material; }
     setPointer(x, y) {
       if (x == null || y == null) { this.pointer = null; return; }
+      if (this.lastPointerT < -1e8 && this.target.off == null) this.target.off = this.aimOff || 0;
       this.pointer = [x, y]; this.lastPointerT = this.time;
     }
     setViewInsets({ right = 0, bottom = 0 } = {}) { if (this.ins.r === right && this.ins.b === bottom) return; this.ins = { r: Math.max(0, right), b: Math.max(0, bottom) }; this._dirty = true; }
     /** Spin the logo (pixels of drag). The beam is re-traced through the rotated solid every frame. */
     beginRotate() { this.rot.drag = true; this.rot.vy = 0; this.rot.vp = 0; this.rot.reset = false; }
     rotateBy(dx, dy) { const k = 0.0085; this.rot.yaw += dx * k; this.rot.pitch = clamp(this.rot.pitch + dy * k, -1.35, 1.35); this.rot.vy = this.rot.vy * 0.5 + dx * k * 30; this.rot.vp = this.rot.vp * 0.5 + dy * k * 30; this.rot.last = performance.now(); }
-    endRotate() { this.rot.drag = false; if (performance.now() - (this.rot.last || 0) > 90) { this.rot.vy = 0; this.rot.vp = 0; } }
+    endRotate() { this.rot.drag = false; this.rot.vy = 0; this.rot.vp = 0; } // no momentum: the logo moves only while it is held
     resetRotation() { this.rot.reset = true; this.rot.vy = 0; this.rot.vp = 0; }
     togglePause(v) { this.paused = typeof v === 'boolean' ? v : !this.paused; return this.paused; }
     cancelRender() { this._cancel = true; }
@@ -2108,6 +2220,54 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       this._resizeMain();
     }
     dispose() { cancelAnimationFrame(this._raf); this._disposed = true; }
+    // ── embed API (additive): page-colour backdrop, transparent output, suspend/resume, settle, destroy
+    /** Draw this CSS colour (or [r,g,b] 0..1 sRGB) as the backdrop, matched through the theme's tone curve; null = theme default. */
+    setBackground(c) {
+      this._bgSrgb = c == null || c === '' ? null : (Array.isArray(c) ? c.slice(0, 3) : parseCssColor(c));
+      this._syncBg(); this._dirty = true;
+    }
+    getBackground() { return this._bgSrgb ? this._bgSrgb.slice() : null; }
+    /** True alpha output: black backdrop, alpha from coverage/light. Flatter: the glass can't refract the page behind the canvas. */
+    setTransparent(v) { v = !!v; if (v === !!this.transparent) return; this.transparent = v; this._syncBg(); this._dirty = true; }
+    _syncBg() {
+      const gl = this.gl, u = this.p.glass.u, T = THEMES[this.theme];
+      this._bgLin = null; this._bgGain = null; this._bloomTh = 0;
+      this._pageDisp = null;
+      if (this.transparent) { const L = LOOKS[this.material], ex = L.exposure * T.exposure * (T.mode ? 1 / L.exposure : 1); this._bgLin = T.bg.slice(); this._pageDisp = toneMapJS(T.bg.map(v => v * ex), T.tone).map(v => v + 1 / 255); }
+      else if (this._bgSrgb) {
+        const L = LOOKS[this.material], ex = L.exposure * T.exposure * (T.mode ? 1 / L.exposure : 1);
+        const tgt = this._bgSrgb.map(v => clamp(v, 0, 1));
+        // light theme: keep the wall at the theme's natural level (Neutral's linear range, where the glass and beam read) and lift the
+        // display to the page colour with a small gain; dark/mid colours are solved directly
+        const k = T.mode ? Math.min(1, 0.84 / Math.max(tgt[0], tgt[1], tgt[2], 1e-3)) : 1;
+        const lin = solveBackdrop(tgt.map(v => Math.min(v * k, 0.94)), ex, T.tone);
+        const got = toneMapJS(lin.map(v => v * ex), T.tone);
+        this._bgLin = lin; this._bgGain = tgt.map((v, i) => got[i] > 1e-4 ? clamp(v / got[i], 0.5, 1.3) : 1);
+        const mx = Math.max(lin[0], lin[1], lin[2]); this._bloomTh = Math.max(0.75, mx * 1.3 / 0.3);
+      }
+      gl.useProgram(this.p.glass.p);
+      const base = T.mode ? 0.95 : 0.0, mx = this._bgLin ? Math.max(this._bgLin[0], this._bgLin[1], this._bgLin[2]) : 0;
+      gl.uniform1f(u.uSceneFloor, this._bgLin && !this.transparent ? Math.max(base, mx * 1.25) : base);
+    }
+    /** Stop the render loop entirely (no rAF, no CPU beam tracing). The last frame stays on the canvas. */
+    suspend() { if (this._suspended) return; this._suspended = true; cancelAnimationFrame(this._raf); }
+    resume() { if (this._disposed || !this._suspended) return; this._suspended = false; this._lastT = performance.now(); this._raf = requestAnimationFrame(this._loop.bind(this)); }
+    isSuspended() { return !!this._suspended; }
+    /** Jump the light/pose straight to the idle resting pose (reduced motion): the next ~24 frames only refine AA. */
+    settle() {
+      this.pointer = null; this.lastPointerT = -1e9; this.rot.vy = 0; this.rot.vp = 0;
+      const wasPaused = this.paused; this.paused = false; this._updateTargets(0); this.paused = wasPaused;
+      this.aim.ang = this.target.ang; this.aim.yaw = this.target.yaw; this.aim.pitch = this.target.pitch; this.envYaw = this.envYawT;
+      if (this.field) { const p = this._pose(); this._bestOff = this._bestOffset(p.ang, rotYX(p.yaw, p.pitch)); this.aimOff = this._bestOff; }
+      this._bestAng = null; this._dirty = true;
+    }
+    /** True once the image is still and fully antialiased. */
+    isSettled() { return !!this.field && !this._dirty && this.samples >= 24; }
+    /** Release everything: stop the loop and drop the WebGL context. */
+    destroy() {
+      this.dispose(); clearTimeout(this._rt); this.listeners = {};
+      try { const ext = this.gl.getExtension('WEBGL_lose_context'); if (ext && !this.gl.isContextLost()) ext.loseContext(); } catch (e) { /* already gone */ }
+    }
 
     // ── internals
     _tp(f) { const gl = this.gl; gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); }
@@ -2134,7 +2294,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const gl = this.gl, L = LOOKS[this.material], u = this.p.glass.u, fi = this.fi;
       gl.useProgram(this.p.glass.p);
       gl.uniform1i(u.uMaterial, this.material === 'glass' ? 0 : 1);
-      gl.uniform1f(u.uIor, IOR);
+      gl.uniform1f(u.uIor, GLASS_IOR);
       gl.uniform3fv(u.uAbsorb, L.absorb || [0, 0, 0]); gl.uniform1f(u.uBgDepth, L.bgDepth || 0.3);
       gl.uniform3fv(u.uChromeTint, L.tint || [1, 1, 1]); gl.uniform1f(u.uSpectral, L.spectral || 0);
       gl.uniform1f(u.uSky, L.sky ? (THEMES[this.theme].mode ? 0.62 : 0.8) : 0); gl.uniform1f(u.uGround, THEMES[this.theme].mode ? 0.02 : 0.006); gl.uniform1f(u.uSceneFloor, THEMES[this.theme].mode ? 0.95 : 0.0);
@@ -2142,7 +2302,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const chromeM = this.material === 'chrome';
       gl.uniform1f(u.uAmbient, chromeM ? (T.mode ? 0.05 : 0.0) : (T.ambient != null ? T.ambient : (studio ? L.ambient * 3 : L.ambient))); gl.uniform1f(u.uHorizon, chromeM ? 0 : (T.mode ? 0.5 : L.horizon)); gl.uniform3fv(u.uSpecNorm, SPEC_NORM_SHADER);
       gl.uniform1f(u.uEnvThrough, T.mode ? (studio ? 0.25 : 0.08) : (studio ? 0.75 : (L.envThrough || 0)));
-      gl.uniform1f(u.uCauchyB, CAUCHY_B * (studio ? 0.5 : 0.22));
+      gl.uniform1f(u.uCauchyB, GLASS_CAUCHY_B);
       const S = this.shape, th = S.thickness, ro = S.roundness;
       const depth = clamp(L.shape.depth * Math.pow(2, (th - 0.5) * 2.4), 0.012, Math.max(fi.maxInset * (1.6 + 3.4 * th), 0.05));
       const bevelMax = Math.min(depth * 0.98, Math.max(fi.maxInset * 0.72, 0.004)); // keep the surface off the stroke's centre ridge
@@ -2160,6 +2320,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         const r = (l.rot || 0) * DEG, cr = Math.cos(r), sr = Math.sin(r);
         return { d, t: [t[0] * cr + b[0] * sr, t[1] * cr + b[1] * sr, t[2] * cr + b[2] * sr], b: [-t[0] * sr + b[0] * cr, -t[1] * sr + b[1] * cr, -t[2] * sr + b[2] * cr], hs: [l.w * 0.5 * DEG, l.h * 0.5 * DEG], c: l.col.map(v => v * l.i * (this.lightMode === 'studio' ? 1.5 : 1) * (this.material === 'chrome' ? 1 : THEMES[this.theme].lightK)), k: l.kind };
       });
+      if (this._bgSrgb !== undefined || this.transparent) this._syncBg();
     }
     _insetCam(W, H) { // CSS-size based framing: centre in free area, fit width on portrait screens
       const r = Math.min(this.ins.r, W * 0.6), b = Math.min(this.ins.b, H * 0.6);
@@ -2192,36 +2353,60 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         if (score > bestScore) { bestScore = score; best = o; }
         if (cur != null && Math.abs(o - cur) < ext * 0.051) curScore = Math.max(curScore, score);
       }
-      if (cur != null && curScore > 0.002 && bestScore < curScore + 0.02) return cur; // hysteresis: don't hop between near-equal lines
-      return bestScore > 0.002 ? best : 0.06;
+      if (cur != null && curScore > 0.002 && bestScore < curScore + 0.035) return cur; // hysteresis: don't hop between near-equal lines
+      if (bestScore <= 0.002) return 0.06;
+      // refine around the coarse winner (1/4 grid steps) so the chosen line moves continuously with the light
+      const coarse = best;
+      for (let j = -3; j <= 3; j++) {
+        if (!j) continue; const o = coarse + j * ext * 0.0125;
+        const { o: org, dir } = this._beamRays(ang, o);
+        const a = this.beam.trace(org, dir, 420, false, R); if (a.length < 4) continue;
+        const b = this.beam.trace(org, dir, 680, false, R); if (b.length !== a.length) continue;
+        const m = this.beam.trace(org, dir, 550, false, R); if (m.length !== a.length) continue;
+        const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1));
+        const e = Math.min(a[a.length - 1][5], b[b.length - 1][5]);
+        const score = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
+        if (score > bestScore) { bestScore = score; best = o; }
+      }
+      return best;
     }
     _buildBeam(ang, R) {
       const mirror = this.material === 'chrome';
-      const { o, dir, perp } = this._beamRays(ang);
-      const waves = mirror ? 1 : BEAM_WAVES;
+      const waves = mirror ? 1 : BEAM_WAVES, S = mirror ? 1 : BEAM_SLICES;
       const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5;
-      const paths = [];
-      for (let k = 0; k < waves; k++) {
-        const bc = mirror ? { lam: 550, rgb: [1, 1, 1] } : BEAM_COLORS[k];
-        paths.push({ P: this.beam.trace(o, dir, bc.lam, mirror, R), rgb: bc.rgb });
-      }
       const base = I0 / 1.4 / waves;
-      const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
-      const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
-      for (let k = 0; k < waves; k++) {
-        const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
-        const same = !!B && A.length === B.length;
-        const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
-        const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : 0;
-        for (let i = 0; i + 1 < A.length; i++) {
-          const n = nRef(i, A);
-          this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
-          if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base, w0, n);
+      // Gaussian profile across the finite beam (as vgpu's normalizedProfileWeights): weights sum to 1
+      const prof = [], wt = [];
+      for (let s = 0; s < S; s++) { const p = S === 1 ? 0 : -1 + 2 * s / (S - 1); prof.push(p); wt.push(Math.exp(-BEAM_EDGE * p * p)); }
+      const wsum = wt.reduce((a, b) => a + b, 0) || 1;
+      const off0 = this.aimOff || 0, mid = S >> 1;
+      for (let s = 0; s < S; s++) {
+        const { o, dir } = this._beamRays(ang, off0 + prof[s] * BEAM_HALF);
+        const paths = [];
+        for (let k = 0; k < waves; k++) {
+          const bc = mirror ? { lam: 550, rgb: [1, 1, 1] } : BEAM_COLORS[k];
+          paths.push({ P: this.beam.trace(o, dir, bc.lam, mirror, R), rgb: bc.rgb });
+        }
+        const sb = base * wt[s] / wsum; // this slice's share of the light
+        const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
+        const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
+        for (let k = 0; k < waves; k++) {
+          const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
+          const same = !!B && A.length === B.length;
+          const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
+          // a colour with no same-route neighbour is an isolated ray: don't draw it as a full-strength line (it read as a hard streak)
+          const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : (mirror ? 0 : 1e9);
+          for (let i = 0; i + 1 < A.length; i++) {
+            const n = s === mid ? nRef(i, A) : Math.max(3, nRef(i, A) >> 1); // outer slices are soft: half the subdivision
+            // the bright white core (where colours still overlap) is drawn once, by the centre slice, at full strength
+            if (s === mid) this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
+            if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, sb, w0, n, this._rayDen(paths, k, i), this._rayDen(paths, k + 1, i));
+          }
         }
       }
       return new Float32Array(V);
     }
-    _fall(q) { return (q[5] == null ? 1 : q[5]) / Math.pow(1 + q[3] * 0.22, 1.25); }
+    _fall(q) { return (q[5] == null ? 1 : q[5]) / Math.pow(1 + q[3] * FADE_RATE, FADE_POWER); } // vgpu longitudinal falloff
     _lerpPt(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t, a[4] + (b[4] - a[4]) * t, a[5] + (b[5] - a[5]) * t]; }
     _seg(V, a, b, rgb, base, w0, sepA, sepB, fadeWithSep, n) {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); if (len < 1e-5) return;
@@ -2237,17 +2422,28 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         v(p0, i0, -1); v(p0, i0, 1); v(p1, i1, 1); v(p0, i0, -1); v(p1, i1, 1); v(p1, i1, -1);
       }
     }
-    _sheet(V, a0, a1, b0, b1, ca, cb, base, w0, n) {
+    /** Ray k's local spread at segment i (fraction t): mean distance to its same-route neighbours on BOTH sides
+     *  (a central difference, as in ray/photon differentials). Every strip touching ray k uses this same value,
+     *  so neighbouring strips agree along their shared edge and the fan has no brightness steps. */
+    _rayDen(paths, k, i) {
+      const A = paths[k].P, L = k > 0 && paths[k - 1].P.length === A.length ? paths[k - 1].P : null, R = k + 1 < paths.length && paths[k + 1].P.length === A.length ? paths[k + 1].P : null;
+      const d = (P, Q, t) => { const a = this._lerpPt(P[i], P[i + 1], t), b = this._lerpPt(Q[i], Q[i + 1], t); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
+      return (t) => { let s = 0, c = 0; if (L) { s += d(A, L, t); c++; } if (R) { s += d(A, R, t); c++; } return c ? s / c : 0; };
+    }
+    _sheet(V, a0, a1, b0, b1, ca, cb, base, w0, n, denA, denB) {
       const g = (sep) => clamp(sep / (w0 * 1.6), 0, 1) * 0.96 * w0 * 2 / Math.max(sep, w0 * 0.4);
+      const q = (sep) => 1 - smooth01((sep - 0.22) / 0.4); // neighbours on different routes fade out smoothly instead of popping
       for (let i = 0; i < n; i++) {
         const t0 = i / n, t1 = (i + 1) / n;
         const A0 = this._lerpPt(a0, a1, t0), A1 = this._lerpPt(a0, a1, t1), B0 = this._lerpPt(b0, b1, t0), B1 = this._lerpPt(b0, b1, t1);
         const s0 = Math.hypot(A0[0] - B0[0], A0[1] - B0[1], A0[2] - B0[2]), s1 = Math.hypot(A1[0] - B1[0], A1[1] - B1[1], A1[2] - B1[2]);
         if (s0 < 1e-4 && s1 < 1e-4) continue;
-        const q = (sep) => 1 - smooth01((sep - 0.22) / 0.4); // neighbours on different routes fade out smoothly instead of popping
-        const k0 = base * this._fall(A0) * g(s0) * q(s0), k1 = base * this._fall(A1) * g(s1) * q(s1);
+        // brightness lives on the RAYS (own fall-off × own spread), not on the strip → continuous across the fan
+        const ra0 = denA(t0), ra1 = denA(t1), rb0 = denB(t0), rb1 = denB(t1);
+        const kA0 = base * this._fall(A0) * g(ra0) * q(ra0), kA1 = base * this._fall(A1) * g(ra1) * q(ra1);
+        const kB0 = base * this._fall(B0) * g(rb0) * q(rb0), kB1 = base * this._fall(B1) * g(rb1) * q(rb1);
         const v = (p, c, k) => V.push(p[0], p[1], p[2], c[0] * k, c[1] * k, c[2] * k, 0);
-        v(A0, ca, k0); v(B0, cb, k0); v(B1, cb, k1); v(A0, ca, k0); v(B1, cb, k1); v(A1, ca, k1);
+        v(A0, ca, kA0); v(B0, cb, kB0); v(B1, cb, kB1); v(A0, ca, kA0); v(B1, cb, kB1); v(A1, ca, kA1);
       }
     }
     _uploadBeam(arr) { const gl = this.gl; gl.bindBuffer(gl.ARRAY_BUFFER, this.beamBuf); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.DYNAMIC_DRAW); this.beamCount = arr.length / 7; }
@@ -2263,7 +2459,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       // 1. scene: background + beam
       gl.disable(gl.BLEND);
       const T = THEMES[this.theme], bu = this.p.bg.u;
-      gl.useProgram(this.p.bg.p); gl.uniform3fv(bu.uBg, T.bg || LOOKS[this.material].bg); gl.uniform2f(bu.uRes, P.w, P.h); gl.uniform2f(bu.uCenter, cam.cx, cam.cy);
+      gl.useProgram(this.p.bg.p); gl.uniform3fv(bu.uBg, this._bgLin || T.bg || LOOKS[this.material].bg); gl.uniform1f(bu.uFlat, this._bgLin ? (this.transparent ? 2 : 1) : 0); gl.uniform2f(bu.uRes, P.w, P.h); gl.uniform2f(bu.uCenter, cam.cx, cam.cy);
       gl.uniform1i(bu.uMode, T.mode); gl.uniform2f(bu.uJitter, j[0], j[1]); gl.uniform1f(bu.uCamDist, dist); gl.uniform1f(bu.uTanFov, tanF); gl.uniform1f(bu.uEnvYaw, this.envYaw);
       gl.uniform1f(bu.uShadow, this.field ? (this.material === 'chrome' ? 1.4 : 1.0) : 0.0);
       gl.uniformMatrix3fv(bu.uRotT, false, new Float32Array([R[0][0], R[0][1], R[0][2], R[1][0], R[1][1], R[1][2], R[2][0], R[2][1], R[2][2]]));
@@ -2299,7 +2495,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const gl = this.gl, p = this.p; if (!P.bloom.length) return false;
       gl.disable(gl.BLEND);
       gl.useProgram(p.pre.p); gl.activeTexture(gl.TEXTURE0); gl.uniform1i(p.pre.u.uSrc, 0); gl.bindTexture(gl.TEXTURE_2D, P.accum[P.cur].tex);
-      gl.uniform2f(p.pre.u.uTexel, 1 / P.w, 1 / P.h); gl.uniform1f(p.pre.u.uThreshold, 0.75); this._draw(P.bloom[0].fb, P.bloom[0].w, P.bloom[0].h);
+      gl.uniform2f(p.pre.u.uTexel, 1 / P.w, 1 / P.h); gl.uniform1f(p.pre.u.uThreshold, this._bloomTh || THEMES[this.theme].bloomTh || 0.75); this._draw(P.bloom[0].fb, P.bloom[0].w, P.bloom[0].h);
       gl.useProgram(p.down.p); gl.uniform1i(p.down.u.uSrc, 0);
       for (let i = 1; i < P.bloom.length; i++) { const s = P.bloom[i - 1], d = P.bloom[i]; gl.bindTexture(gl.TEXTURE_2D, s.tex); gl.uniform2f(p.down.u.uTexel, 1 / s.w, 1 / s.h); this._draw(d.fb, d.w, d.h); }
       gl.useProgram(p.up.p); gl.uniform1i(p.up.u.uSrc, 0); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -2313,7 +2509,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, P.accum[P.cur].tex); gl.uniform1i(u.uAccum, 0);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, hb ? P.bloom[0].tex : P.accum[P.cur].tex); gl.uniform1i(u.uBloom, 1);
       const T = THEMES[this.theme]; gl.uniform1i(u.uHasBloom, hb ? 1 : 0); gl.uniform1f(u.uExposure, L.exposure * T.exposure * (T.mode ? 1 / L.exposure : 1)); gl.uniform1f(u.uBloomAmt, L.bloom * T.bloomK); gl.uniform1i(u.uTone, T.tone);
-      gl.uniform1f(u.uVignette, transparent ? 0 : L.vignette * T.vignetteK); gl.uniform1f(u.uFlip, flip ? 1 : 0); gl.uniform2f(u.uOutRes, w, h); gl.uniform1f(u.uTransparent, transparent ? 1 : 0);
+      gl.uniform1f(u.uVignette, (transparent || this._bgLin) ? 0 : L.vignette * T.vignetteK); gl.uniform1f(u.uUseGain, this._bgGain && !transparent ? 1 : 0); gl.uniform1f(u.uBloomEdge, this._bgLin ? 1 : 0); gl.uniform1f(u.uFeather, this._bgLin && fb === null ? 0.07 : 0); gl.uniform3fv(u.uPage, transparent ? (this._pageDisp && fb === null ? this._pageDisp : [0, 0, 0]) : (this._bgSrgb || [0, 0, 0])); gl.uniform1f(u.uAlphaK, transparent && fb === null && this._pageDisp ? 1.0 : 0); if (this._bgGain) gl.uniform3fv(u.uGain, this._bgGain); gl.uniform1f(u.uFlip, flip ? 1 : 0); gl.uniform2f(u.uOutRes, w, h); gl.uniform1f(u.uTransparent, transparent ? 1 : 0);
       this._draw(fb, w, h);
       // dust, lit by the beam's glow
       if (hb && !transparent && this.theme === 'dark' && this.lightMode === 'beam') {
@@ -2330,25 +2526,34 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     _updateTargets(dt) {
       const W = this.canvas.clientWidth || 1, H = this.canvas.clientHeight || 1; const cam = this._insetCam(W, H);
       if (this.pointer) {
-        // pointer → point on the logo plane (approx: un-tilted camera); light comes FROM the pointer side
-        const tanF = Math.tan(15 * DEG) * cam.k; const nx = (this.pointer[0] / W * 2 - 1) - cam.cx, ny = (1 - this.pointer[1] / H * 2) - cam.cy;
-        const x = nx * (W / H) * tanF * 4.6, y = ny * tanF * 4.6;
-        const dx = x - 0.0, dy = y - 0.06; const r = Math.hypot(dx, dy);
-        if (r > 0.35) this.target.ang = Math.atan2(dy, dx);
-        this.target.yaw = clamp(x / 3, -1, 1) * 0.12; this.target.pitch = clamp(-y / 2, -1, 1) * 0.07; this.envYawT = clamp(x / 2.6, -1, 1) * 0.9;
-      } else if (this.time - this.lastPointerT > 3.5 && !this.paused) {
-        // idle: slow seamless drift of the light (6 s period)
-        // idle: glide to a calm resting pose and stop, so the image settles into a crisp still
+        // vgpu model: height swings the light source along an arc (top → light from upper-left), width chooses the point of
+        // impact across the logo. A direct, predictable mapping: no search moves the beam behind the user's back.
+        const u = clamp(this.pointer[0] / W, 0, 1), v = clamp(this.pointer[1] / H, 0, 1);
+        const ext = Math.max(this.fi.extent[0], this.fi.extent[1]);
+        this.target.ang = Math.PI + (v - 0.5) * 2 * AIM_ARC;
+        this.target.off = (u - 0.5) * 2 * AIM_REACH * ext;
+        // hover only steers the light: the logo itself never tilts or moves unless the user drags it
+        this.target.yaw = 0; this.target.pitch = 0; this.envYawT = (u * 2 - 1) * 0.9;
+      } else if (this.lastPointerT < -1e8 && !this.paused) {
+        // no pointer yet: rest pose (smart aim picks the opening line). Once the user has aimed, the light stays where they left it.
         this.target.ang = Math.PI + 0.2; this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
+      } else {
+        // pointer left: like vgpu, only the hover tilt relaxes; the light itself stays exactly where it was
+        this.target.yaw = 0.0; this.target.pitch = 0.0;
       }
       // critically damped follow (angles wrap)
-      const k = 1 - Math.exp(-dt * 2.6); // slow, critically damped follow: elegant, no jitter
+      const ka = 1 - Math.pow(1 - AIM_LERP, dt * 60), kt = 1 - Math.pow(1 - ORBIT_LERP, dt * 60); // vgpu easing, frame-rate independent
       let da = this.target.ang - this.aim.ang; da = Math.atan2(Math.sin(da), Math.cos(da));
-      this.aim.ang += da * k; this.aim.yaw += (this.target.yaw - this.aim.yaw) * k; this.aim.pitch += (this.target.pitch - this.aim.pitch) * k; this.envYaw += (this.envYawT - this.envYaw) * k;
+      this.aim.ang += da * ka; this.aim.yaw += (this.target.yaw - this.aim.yaw) * kt; this.aim.pitch += (this.target.pitch - this.aim.pitch) * kt; this.envYaw += (this.envYawT - this.envYaw) * kt;
+      // snap the sub-pixel tail so the image stops 'moving' (and sharpens) as soon as the motion is invisible
+      if (Math.abs(Math.atan2(Math.sin(this.target.ang - this.aim.ang), Math.cos(this.target.ang - this.aim.ang))) < 6e-4) this.aim.ang = this.target.ang;
+      if (Math.abs(this.target.yaw - this.aim.yaw) < 2e-4) this.aim.yaw = this.target.yaw;
+      if (Math.abs(this.target.pitch - this.aim.pitch) < 2e-4) this.aim.pitch = this.target.pitch;
+      if (Math.abs(this.envYawT - this.envYaw) < 1e-3) this.envYaw = this.envYawT;
       return cam;
     }
     _loop(now) {
-      if (this._disposed) return; this._raf = requestAnimationFrame(this._loop.bind(this));
+      if (this._disposed || this._suspended) return; this._raf = requestAnimationFrame(this._loop.bind(this));
       if (this.busy) return;
       const dt = Math.min(0.1, (now - this._lastT) / 1000); this._lastT = now;
       this._fpsA += dt; this._fpsN++; if (this._fpsA > 0.5) { this._emit('fps', Math.round(this._fpsN / this._fpsA)); this._fpsA = 0; this._fpsN = 0; }
@@ -2360,10 +2565,22 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       else if (!r.drag && (Math.abs(r.vy) > 1e-4 || Math.abs(r.vp) > 1e-4)) { r.yaw += r.vy * dt; r.pitch = clamp(r.pitch + r.vp * dt, -1.35, 1.35); const d = Math.exp(-dt * 2.6); r.vy *= d; r.vp *= d; if (Math.abs(r.vy) < 1e-3) r.vy = 0; if (Math.abs(r.vp) < 1e-3) r.vp = 0; }
       const pose = this._pose(); const Rm = rotYX(pose.yaw, pose.pitch);
       const rotKey = pose.yaw.toFixed(4) + ',' + pose.pitch.toFixed(4);
-      if (this.field && (this._bestAng == null || Math.abs(this.aim.ang - this._bestAng) > 0.01 || rotKey !== this._bestRot || this._dirty)) {
-        if (!this._bestT || now - this._bestT > 60 || this._dirty) { this._bestT = now; this._bestAng = this.aim.ang; this._bestRot = rotKey; this._bestOff = this._bestOffset(this.aim.ang, Rm); }
+      // smart aim searches at the light's DESTINATION (target), not its current angle, so the chosen line arrives together
+      // with the light instead of hopping sideways after the cursor has stopped
+      const steered = this.lastPointerT > -1e8;
+      if (steered) {
+        const t = this.target.off ?? this.aimOff ?? 0, cur = this.aimOff ?? t;
+        this.aimOff = cur + (t - cur) * (1 - Math.pow(1 - AIM_LERP, dt * 60)); if (Math.abs(t - this.aimOff) < 5e-4) this.aimOff = t;
+        this._bestOff = null; this._bestAng = null;
       }
-      if (this._bestOff != null) { this.aimOff = (this.aimOff ?? this._bestOff) + (this._bestOff - (this.aimOff ?? this._bestOff)) * (1 - Math.exp(-dt * 1.4)); }
+      const tA = this.target.ang, tKey = this.rot.yaw.toFixed(4) + ',' + this.rot.pitch.toFixed(4) + '|' + this.target.yaw.toFixed(3) + ',' + this.target.pitch.toFixed(3);
+      if (!steered && this.field && (this._bestAng == null || Math.abs(tA - this._bestAng) > 0.01 || tKey !== this._bestRot || this._dirty)) {
+        if (!this._bestT || now - this._bestT > 33 || this._dirty) {
+          this._bestT = now; this._bestAng = tA; this._bestRot = tKey;
+          this._bestOff = this._bestOffset(tA, rotYX(this.rot.yaw + this.target.yaw, clamp(this.rot.pitch + this.target.pitch, -1.45, 1.45)));
+        }
+      }
+      if (!steered && this._bestOff != null) { { const cur = this.aimOff ?? this._bestOff, lim = dt * 0.9; this.aimOff = cur + clamp((this._bestOff - cur) * (1 - Math.exp(-dt * 8)), -lim, lim); } if (Math.abs(this._bestOff - this.aimOff) < 5e-4) this.aimOff = this._bestOff; } // quick for small corrections; a line switch becomes a smooth slide (<=0.9 units/s), never a jump
       const key = [(this.aimOff || 0).toFixed(4), this.envYaw.toFixed(4), this.aim.ang.toFixed(4), pose.yaw.toFixed(4), pose.pitch.toFixed(4), cam.cx.toFixed(4), cam.cy.toFixed(4), cam.k.toFixed(4)].join('|');
       const moving = key !== this._key; this._key = key;
       this._ft = this._ft * 0.9 + dt * 1000 * 0.1;
@@ -2381,7 +2598,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         if (moving && this._ft < 12) { this.frame++; this._sample(P, pose, 0.3, cam, this.frame, 0.0); } // spare GPU time → a second AA sample
         this.samples++;
       }
-      this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, false);
+      this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, !!this.transparent);
     }
     // ── offline rendering
     _wait() { const gl = this.gl; const s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); return new Promise(r => { const p = () => { if (gl.clientWaitSync(s, 0, 0) === gl.TIMEOUT_EXPIRED) { setTimeout(p, 2); return; } gl.deleteSync(s); r(); }; p(); }); }
@@ -2450,8 +2667,624 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   }
   SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
   SpectraEngine.version = 2;
+  SpectraEngine._toneMap = toneMapJS; SpectraEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
   window.SpectraEngine = SpectraEngine;
 })();
+
+;
+/* Spectra — src/mesh.js
+ * window.SpectraMesh : turn the logo on screen into a real triangle mesh, and write GLB / STL files.
+ *
+ * Ground truth is the engine's CPU beam tracer (engine.beam, "identical to the shader's extrude()"):
+ *   sdf(x,y,z) = roundedRect2D( d2(x,y), |z| ; half-height hz(x,y), corner radius r(x,y) )
+ * where d2 = bilinear outline field (already corner-rounded by Roundness), hz = depth (domed by the
+ * heavy field when inflated) and r = min(bevel, 0.98·hz). Its zero set is exactly
+ *   · a top/bottom height field  z = ±H(x,y)  over the region d2 ≤ 0, with
+ *       u = d2/r ≤ -1 : H = hz                               (flat or domed face)
+ *       -1 < u ≤ 0   : H = hz - r + r·sqrt(1 - (1+u)²)       (quarter-circle round-over)
+ *   · a vertical wall on the outline d2 = 0, between z = ±(hz - r).
+ * So instead of marching a 3D grid (which bevels/ripples crisp edges), we mesh in 2D:
+ *   1. sample u on a 2D grid aligned to the field texels;
+ *   2. slice every grid triangle that straddles a profile level u_k = cos(θ_k) - 1 into convex
+ *      band polygons (piecewise-linear isobands: crossings are shared per grid edge, so the result is
+ *      conforming and every iso-ring is exact; crossings are root-found on the true bilinear field);
+ *   3. merge crossing-free cells into quadtree blocks while the height stays planar within tolerance
+ *      (flat faces collapse to a few big fans; T-junctions are avoided by fanning each block over
+ *      every vertex on its perimeter);
+ *   4. mirror the top sheet to the bottom (z-symmetry), and stitch them with one wall quad per
+ *      outline segment.
+ * The result is watertight, 2-manifold and consistently outward-wound by construction, rings are on
+ * the exact surface, and holes (O, A, e, rings) fall out of the isoband topology.
+ * Normals are the gradient of the same bicubic-smoothed field the shader shades with (normalAt), so
+ * the mesh shades like the screen; the surface is C1 (no creases) except along thin-stroke ridges.
+ * Zero dependencies. Meshing runs in a Blob worker (main-thread fallback).
+ */
+(function (global) {
+  'use strict';
+
+  /* =====================================================================================
+   * Mesh core — self-contained (stringified into a worker). Returns buildMesh outside a worker.
+   * ===================================================================================== */
+  function spectraMeshCore() {
+    'use strict';
+    var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+    var now = function () { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); };
+
+    /* Quadric-error half-edge collapse on the top height-field sheet. Vertices never move (every
+     * survivor stays exactly on the surface); a collapse u->v is accepted only if u is not fixed, the
+     * link condition holds, no triangle of u's star flips or degenerates in the xy projection (so the
+     * sheet stays a valid height field -> manifold), and no face normal turns by more than 60°. */
+    function simplifySheet(P, Tin, fixed, tol2, progress) {
+      var nV = P.length / 3, nT = Tin.length / 3, i, t, k;
+      var tri = new Int32Array(Tin), alive = new Uint8Array(nT).fill(1);
+      var deg = new Int32Array(nV);
+      for (i = 0; i < tri.length; i++) deg[tri[i]]++;
+      var vt = new Array(nV);
+      for (i = 0; i < nV; i++) vt[i] = [];
+      for (t = 0; t < nT; t++) for (k = 0; k < 3; k++) vt[tri[3 * t + k]].push(t);
+      var Qd = new Float64Array(nV * 10);
+      for (t = 0; t < nT; t++) {
+        var a = 3 * tri[3 * t], b = 3 * tri[3 * t + 1], c = 3 * tri[3 * t + 2];
+        var ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], wx = P[c] - P[a], wy = P[c + 1] - P[a + 1], wz = P[c + 2] - P[a + 2];
+        var nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx, nl = Math.hypot(nx, ny, nz);
+        if (!(nl > 0)) continue;
+        nx /= nl; ny /= nl; nz /= nl; var d = -(nx * P[a] + ny * P[a + 1] + nz * P[a + 2]);
+        for (k = 0; k < 3; k++) {
+          var o = 10 * tri[3 * t + k];
+          Qd[o] += nx * nx; Qd[o + 1] += nx * ny; Qd[o + 2] += nx * nz; Qd[o + 3] += nx * d; Qd[o + 4] += ny * ny;
+          Qd[o + 5] += ny * nz; Qd[o + 6] += ny * d; Qd[o + 7] += nz * nz; Qd[o + 8] += nz * d; Qd[o + 9] += d * d;
+        }
+      }
+      function cost(u, v) {
+        var a = 10 * u, b = 10 * v, x = P[3 * v], y = P[3 * v + 1], z = P[3 * v + 2];
+        var q0 = Qd[a] + Qd[b], q1 = Qd[a + 1] + Qd[b + 1], q2 = Qd[a + 2] + Qd[b + 2], q3 = Qd[a + 3] + Qd[b + 3], q4 = Qd[a + 4] + Qd[b + 4];
+        var q5 = Qd[a + 5] + Qd[b + 5], q6 = Qd[a + 6] + Qd[b + 6], q7 = Qd[a + 7] + Qd[b + 7], q8 = Qd[a + 8] + Qd[b + 8], q9 = Qd[a + 9] + Qd[b + 9];
+        return Math.max(0, q0 * x * x + 2 * q1 * x * y + 2 * q2 * x * z + 2 * q3 * x + q4 * y * y + 2 * q5 * y * z + 2 * q6 * y + q7 * z * z + 2 * q8 * z + q9);
+      }
+      // binary min-heap over parallel typed arrays
+      var cap = 1 << 16, hc = new Float64Array(cap), hu = new Int32Array(cap), hv = new Int32Array(cap), hs = new Float64Array(cap), hn = 0;
+      var ver = new Int32Array(nV);
+      function grow() { cap *= 2; var a1 = new Float64Array(cap); a1.set(hc); hc = a1; var a2 = new Int32Array(cap); a2.set(hu); hu = a2; var a3 = new Int32Array(cap); a3.set(hv); hv = a3; var a4 = new Float64Array(cap); a4.set(hs); hs = a4; }
+      function push(u, v) {
+        if (fixed[u]) return;
+        var cst = cost(u, v); if (cst > tol2) return;
+        if (hn === cap) grow();
+        var i2 = hn++, st = ver[u] * 4294967296 + ver[v];
+        while (i2 > 0) { var p = (i2 - 1) >> 1; if (hc[p] <= cst) break; hc[i2] = hc[p]; hu[i2] = hu[p]; hv[i2] = hv[p]; hs[i2] = hs[p]; i2 = p; }
+        hc[i2] = cst; hu[i2] = u; hv[i2] = v; hs[i2] = st;
+      }
+      var pu = 0, pvv = 0, ps = 0;
+      function pop() {
+        pu = hu[0]; pvv = hv[0]; ps = hs[0]; hn--;
+        if (hn > 0) {
+          var cst = hc[hn], u = hu[hn], v = hv[hn], st = hs[hn], i2 = 0;
+          for (;;) { var l = 2 * i2 + 1; if (l >= hn) break; var r = l + 1, m = (r < hn && hc[r] < hc[l]) ? r : l; if (hc[m] >= cst) break; hc[i2] = hc[m]; hu[i2] = hu[m]; hv[i2] = hv[m]; hs[i2] = hs[m]; i2 = m; }
+          hc[i2] = cst; hu[i2] = u; hv[i2] = v; hs[i2] = st;
+        }
+      }
+      for (t = 0; t < nT; t++) for (k = 0; k < 3; k++) push(tri[3 * t + k], tri[3 * t + (k + 1) % 3]);
+      var removed = new Uint8Array(nV), mark = new Int32Array(nV), stampM = 0;
+      var COS_MAX = 0.5;
+      function tryCollapse(u, v) {
+        var su = vt[u], j, tt, cntUV = 0;
+        // link condition: common neighbours of u and v == the apexes of the two triangles on edge uv
+        stampM++;
+        for (j = 0; j < su.length; j++) { tt = su[j]; if (!alive[tt]) continue; for (var q = 0; q < 3; q++) mark[tri[3 * tt + q]] = stampM; }
+        var common = 0, sv = vt[v];
+        stampM++; var sM = stampM;
+        for (j = 0; j < sv.length; j++) { tt = sv[j]; if (!alive[tt]) continue; for (q = 0; q < 3; q++) { var w = tri[3 * tt + q]; if (mark[w] === sM - 1) { mark[w] = sM; if (w !== u && w !== v) common++; } } }
+        for (j = 0; j < su.length; j++) { tt = su[j]; if (!alive[tt]) continue; if (tri[3 * tt] === v || tri[3 * tt + 1] === v || tri[3 * tt + 2] === v) cntUV++; }
+        if (cntUV !== 2 || common !== 2) return false;
+        var vx = P[3 * v], vy = P[3 * v + 1], vz = P[3 * v + 2];
+        for (j = 0; j < su.length; j++) {
+          tt = su[j]; if (!alive[tt]) continue;
+          var A = tri[3 * tt], B = tri[3 * tt + 1], C = tri[3 * tt + 2];
+          if (A === v || B === v || C === v) continue;
+          var ax = P[3 * A], ay = P[3 * A + 1], az = P[3 * A + 2], bx = P[3 * B], by = P[3 * B + 1], bz = P[3 * B + 2], cx = P[3 * C], cy = P[3 * C + 1], cz = P[3 * C + 2];
+          var onx = (by - ay) * (cz - az) - (bz - az) * (cy - ay), ony = (bz - az) * (cx - ax) - (bx - ax) * (cz - az), onz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+          if (A === u) { ax = vx; ay = vy; az = vz; } else if (B === u) { bx = vx; by = vy; bz = vz; } else { cx = vx; cy = vy; cz = vz; }
+          var nnx = (by - ay) * (cz - az) - (bz - az) * (cy - ay), nny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az), nnz = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+          // xy orientation must stay positive and non-degenerate (relative to edge lengths)
+          var e2 = Math.max((bx - ax) * (bx - ax) + (by - ay) * (by - ay), (cx - ax) * (cx - ax) + (cy - ay) * (cy - ay), (cx - bx) * (cx - bx) + (cy - by) * (cy - by));
+          if (nnz <= 1e-4 * e2) return false;
+          var l1 = Math.hypot(onx, ony, onz), l2 = Math.hypot(nnx, nny, nnz);
+          if (l1 > 0 && (onx * nnx + ony * nny + onz * nnz) < COS_MAX * l1 * l2) return false;
+        }
+        // commit
+        for (j = 0; j < su.length; j++) {
+          tt = su[j]; if (!alive[tt]) continue;
+          if (tri[3 * tt] === v || tri[3 * tt + 1] === v || tri[3 * tt + 2] === v) { alive[tt] = 0; continue; }
+          for (q = 0; q < 3; q++) if (tri[3 * tt + q] === u) tri[3 * tt + q] = v;
+          sv.push(tt);
+        }
+        for (q = 0; q < 10; q++) Qd[10 * v + q] += Qd[10 * u + q];
+        removed[u] = 1; vt[u] = [];
+        // compact v's list
+        var nl2 = []; for (j = 0; j < sv.length; j++) if (alive[sv[j]]) nl2.push(sv[j]); vt[v] = nl2;
+        ver[v]++;
+        for (j = 0; j < nl2.length; j++) { tt = nl2[j]; for (q = 0; q < 3; q++) { var w2 = tri[3 * tt + q]; if (w2 !== v) { ver[w2]++; } } }
+        for (j = 0; j < nl2.length; j++) { tt = nl2[j]; for (q = 0; q < 3; q++) { var aa = tri[3 * tt + q], bb = tri[3 * tt + (q + 1) % 3]; push(aa, bb); } }
+        return true;
+      }
+      var done = 0, total = nV;
+      while (hn > 0) {
+        pop(); var u0 = pu, v0 = pvv;
+        if (removed[u0] || removed[v0] || ps !== ver[u0] * 4294967296 + ver[v0]) continue;
+        if (tryCollapse(u0, v0) && (++done & 8191) === 0) progress(Math.min(1, done / total));
+      }
+      var out = [];
+      for (t = 0; t < nT; t++) if (alive[t]) out.push(tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]);
+      return out;
+    }
+
+    function buildMesh(job, progress) {
+      var t0 = now();
+      progress = progress || function () {};
+      var s = job.size, RF = job.R, GF = job.G, sh = job.shape, ext = job.extent;
+      var depth = sh.depth, bevel = sh.bevel, inflate = sh.inflate || 0, inset = Math.max(sh.inset || 0.05, 1e-3);
+      var Q = job.quality === 'high' ? { h: 2 / 1024, tolZ: 0.00025, tolP: 0.0004, tolQ: 0.00025, maxB: 32 } : { h: 2 / 512, tolZ: 0.0007, tolP: 0.001, tolQ: 0.0007, maxB: 32 };
+      if (job.quality === 'draft') Q = { h: 2 / 256, tolZ: 0.002, tolP: 0.003, tolQ: 0.002, maxB: 16 };
+
+      // ── the engine's field sampling (bilinear, clamp + outside extension) — mirrors Beam3D.f
+      var DB = 0;
+      function f(x, y) {
+        var cx = clamp(x, -1, 1), cy = clamp(y, -1, 1);
+        var fx = (cx * 0.5 + 0.5) * s - 0.5, fy = (0.5 - cy * 0.5) * s - 0.5;
+        var ix = clamp(Math.floor(fx), 0, s - 2), iy = clamp(Math.floor(fy), 0, s - 2);
+        var tx = clamp(fx - ix, 0, 1), ty = clamp(fy - iy, 0, 1), i0 = iy * s + ix;
+        var o = Math.hypot(Math.max(Math.abs(x) - 1, 0), Math.max(Math.abs(y) - 1, 0));
+        var a = (RF[i0] * (1 - tx) + RF[i0 + 1] * tx) * (1 - ty) + (RF[i0 + s] * (1 - tx) + RF[i0 + s + 1] * tx) * ty;
+        var b = (GF[i0] * (1 - tx) + GF[i0 + 1] * tx) * (1 - ty) + (GF[i0 + s] * (1 - tx) + GF[i0 + s + 1] * tx) * ty;
+        DB = b + o; return a + o;
+      }
+      function hzOf(db) {
+        var hz = depth;
+        if (inflate > 0) { var k = clamp(-db / inset, 0, 1); hz *= 1 + (0.3 + 0.7 * (1 - (1 - k) * (1 - k)) - 1) * inflate; }
+        return hz;
+      }
+      var rOf = function (hz) { return Math.min(bevel, hz * 0.98); };
+      var HZ_ = 0;
+      function uAt(x, y) { var d2 = f(x, y); var hz = hzOf(DB); HZ_ = hz; return d2 / rOf(hz); }
+      function zTop(u, hz) {
+        var r = rOf(hz); if (u <= -1) return hz;
+        var c = 1 + u; if (c >= 1) return hz - r;
+        return hz - r + r * Math.sqrt(Math.max(0, 1 - c * c));
+      }
+
+      // ── profile levels: L[0] = 0 (outline / wall top) … L[K] = -1 (start of the face)
+      var cosStep = 1 - Q.tolP / Math.max(bevel, 1e-4);
+      var K = cosStep <= -1 ? 2 : Math.ceil((Math.PI / 2) / (2 * Math.acos(clamp(cosStep, -1, 1))));
+      K = clamp(K, 2, 14);
+      var L = new Float64Array(K + 1);
+      for (var k = 0; k <= K; k++) L[k] = Math.cos(k * (Math.PI / 2) / K) - 1;
+      L[0] = 0; L[K] = -1;
+      function bandOf(u) { if (u > 0) return 0; for (var k = 1; k <= K; k++) if (u > L[k]) return k; return K + 1; }
+
+      // ── grid aligned to field texel centres
+      var tx = 2 / s, stride = Math.max(1, Math.round(Q.h / tx)), h = stride * tx;
+      var maxB = Q.maxB;
+      var margin = 0.03 + 3 * h;
+      var Nx = Math.ceil(2 * (ext[0] + margin) / h), Ny = Math.ceil(2 * (ext[1] + margin) / h);
+      Nx = Math.ceil(Nx / maxB) * maxB; Ny = Math.ceil(Ny / maxB) * maxB;
+      var snap = function (v) { return (Math.round((v + 1) / tx - 0.5) + 0.5) * tx - 1; };
+      var x0 = snap(-Nx * h / 2), y0 = snap(-Ny * h / 2);
+      var NX = Nx + 1, NY = Ny + 1, NN = NX * NY;
+      var U = new Float64Array(NN), HZ = new Float32Array(NN), Z = new Float32Array(NN);
+      for (var j = 0; j < NY; j++) {
+        var y = y0 + j * h;
+        for (var i = 0; i < NX; i++) {
+          var n = j * NX + i, u = uAt(x0 + i * h, y);
+          for (var kk = 0; kk <= K; kk++) if (Math.abs(u - L[kk]) < 1e-9) u = L[kk] + 1e-9; // keep nodes off levels
+          U[n] = u; HZ[n] = HZ_; Z[n] = zTop(u, HZ_);
+        }
+        if ((j & 63) === 0) progress(0.4 * j / NY);
+      }
+      var tNodes = now();
+
+      // ── cell classification + quadtree merge
+      var BN = new Int8Array(NN); for (var q = 0; q < NN; q++) BN[q] = bandOf(U[q]);
+      var CB = new Int8Array(Nx * Ny); // band if uniform, -1 if mixed
+      var anyInside = false;
+      for (j = 0; j < Ny; j++) for (i = 0; i < Nx; i++) {
+        var a0 = j * NX + i, b0 = BN[a0];
+        CB[j * Nx + i] = (BN[a0 + 1] === b0 && BN[a0 + NX] === b0 && BN[a0 + NX + 1] === b0) ? b0 : -1;
+        if (CB[j * Nx + i] !== 0) anyInside = true;
+      }
+      if (!anyInside) throw new Error('SpectraMesh: the shape is empty');
+      var LMAX = Math.round(Math.log2(maxB)), M = [null];
+      var zOkBlock = function (i0, j0, B) {
+        var c00 = Z[j0 * NX + i0], c10 = Z[j0 * NX + i0 + B], c01 = Z[(j0 + B) * NX + i0], c11 = Z[(j0 + B) * NX + i0 + B];
+        var hb = B >> 1;
+        for (var dj = 0; dj <= 2; dj++) for (var di = 0; di <= 2; di++) {
+          var fx = di / 2, fy = dj / 2;
+          var zi = (c00 * (1 - fx) + c10 * fx) * (1 - fy) + (c01 * (1 - fx) + c11 * fx) * fy;
+          if (Math.abs(Z[(j0 + dj * hb) * NX + i0 + di * hb] - zi) > Q.tolZ) return false;
+        }
+        return true;
+      };
+      for (var l = 1; l <= LMAX; l++) {
+        var B = 1 << l, w = Nx >> l, hgt = Ny >> l, arr = new Int8Array(w * hgt), prev = l === 1 ? null : M[l - 1], pw = Nx >> (l - 1);
+        for (var by = 0; by < hgt; by++) for (var bx = 0; bx < w; bx++) {
+          var c0, c1, c2, c3;
+          if (l === 1) { c0 = CB[(2 * by) * Nx + 2 * bx]; c1 = CB[(2 * by) * Nx + 2 * bx + 1]; c2 = CB[(2 * by + 1) * Nx + 2 * bx]; c3 = CB[(2 * by + 1) * Nx + 2 * bx + 1]; }
+          else { c0 = prev[(2 * by) * pw + 2 * bx]; c1 = prev[(2 * by) * pw + 2 * bx + 1]; c2 = prev[(2 * by + 1) * pw + 2 * bx]; c3 = prev[(2 * by + 1) * pw + 2 * bx + 1]; }
+          var v = (c0 >= 1 && c0 === c1 && c0 === c2 && c0 === c3 && zOkBlock(bx * B, by * B, B)) ? c0 : (c0 === 0 && c1 === 0 && c2 === 0 && c3 === 0 ? 0 : -1);
+          arr[by * w + bx] = v;
+        }
+        M[l] = arr;
+      }
+      var leaves = [], sliced = [], used = new Uint8Array(NN);
+      var markCorners = function (i0, j0, B) { used[j0 * NX + i0] = 1; used[j0 * NX + i0 + B] = 1; used[(j0 + B) * NX + i0] = 1; used[(j0 + B) * NX + i0 + B] = 1; };
+      (function () {
+        var stack = [];
+        for (var by = 0; by < (Ny >> LMAX); by++) for (var bx = 0; bx < (Nx >> LMAX); bx++) stack.push(LMAX, bx, by);
+        while (stack.length) {
+          var yy = stack.pop(), xx = stack.pop(), ll = stack.pop();
+          if (ll === 0) {
+            var cb = CB[yy * Nx + xx];
+            if (cb >= 1) { leaves.push(xx, yy, 1); markCorners(xx, yy, 1); }
+            else if (cb === -1) { sliced.push(xx, yy); markCorners(xx, yy, 1); }
+            continue;
+          }
+          var mv = M[ll][yy * (Nx >> ll) + xx];
+          if (mv === 0) continue;
+          if (mv >= 1) { var BB = 1 << ll; leaves.push(xx * BB, yy * BB, BB); markCorners(xx * BB, yy * BB, BB); continue; }
+          stack.push(ll - 1, 2 * xx, 2 * yy, ll - 1, 2 * xx + 1, 2 * yy, ll - 1, 2 * xx, 2 * yy + 1, ll - 1, 2 * xx + 1, 2 * yy + 1);
+        }
+      })();
+
+      // ── top sheet
+      var P = [], T = [], W = []; // positions (x,y,z), triangle indices, wall directed edges
+      var nodeV = new Int32Array(NN).fill(-1);
+      function nodeVert(nI) {
+        var vI = nodeV[nI]; if (vI >= 0) return vI;
+        vI = P.length / 3; nodeV[nI] = vI;
+        P.push(x0 + (nI % NX) * h, y0 + Math.floor(nI / NX) * h, Z[nI]); return vI;
+      }
+      for (var li = 0; li < leaves.length; li += 3) {
+        var i0 = leaves[li], j0 = leaves[li + 1], Bq = leaves[li + 2], ring = [], t;
+        for (t = 0; t < Bq; t++) { var nn = j0 * NX + i0 + t; if (used[nn]) ring.push(nn); }
+        for (t = 0; t < Bq; t++) { nn = (j0 + t) * NX + i0 + Bq; if (used[nn]) ring.push(nn); }
+        for (t = 0; t < Bq; t++) { nn = (j0 + Bq) * NX + i0 + Bq - t; if (used[nn]) ring.push(nn); }
+        for (t = 0; t < Bq; t++) { nn = (j0 + Bq - t) * NX + i0; if (used[nn]) ring.push(nn); }
+        if (ring.length === 4) {
+          var A = nodeVert(ring[0]), Bv = nodeVert(ring[1]), C = nodeVert(ring[2]), D = nodeVert(ring[3]);
+          T.push(A, Bv, C, A, C, D);
+        } else {
+          var ctr = nodeVert((j0 + (Bq >> 1)) * NX + i0 + (Bq >> 1));
+          var rv = ring.map(nodeVert);
+          for (t = 0; t < rv.length; t++) T.push(ctr, rv[t], rv[(t + 1) % rv.length]);
+        }
+      }
+      progress(0.5);
+
+      // crossings: computed once per grid edge for every level it straddles, root-found on the true field
+      var XK = new Map();
+      function edgeCrossings(eid, na, nb) {
+        var key0 = eid * (K + 1), ua = U[na], ub = U[nb];
+        var xa = x0 + (na % NX) * h, ya = y0 + Math.floor(na / NX) * h, xb = x0 + (nb % NX) * h, yb = y0 + Math.floor(nb / NX) * h;
+        var lo = Math.min(ua, ub), hi = Math.max(ua, ub), lastT = ua > ub ? 0 : 1;
+        // walk levels in order of increasing t (from na to nb)
+        var ks = [];
+        for (var k = 0; k <= K; k++) if (L[k] > lo && L[k] < hi) ks.push(k);
+        if (ua < ub) ks.reverse(); // u increasing along the edge -> levels with larger L come later (smaller k)
+        var tPrev = 0;
+        for (var m = 0; m < ks.length; m++) {
+          var lv = L[ks[m]];
+          // Illinois regula falsi on g(t) = u(t) - lv, bracket [0,1] (g(0)=ua-lv, g(1)=ub-lv opposite signs)
+          var ta = 0, tb = 1, ga = ua - lv, gb = ub - lv, tt = ga / (ga - gb), side = 0;
+          for (var it = 0; it < 12; it++) {
+            tt = (ta * gb - tb * ga) / (gb - ga);
+            var g = uAt(xa + (xb - xa) * tt, ya + (yb - ya) * tt) - lv;
+            if (Math.abs(g) < 1e-7) break;
+            if ((g > 0) === (ga > 0)) { ta = tt; ga = g; if (side === -1) gb *= 0.5; side = -1; }
+            else { tb = tt; gb = g; if (side === 1) ga *= 0.5; side = 1; }
+          }
+          tt = clamp(tt, Math.max(0.002, tPrev + 0.001), 0.998);
+          tPrev = tt;
+          var px = xa + (xb - xa) * tt, py = ya + (yb - ya) * tt;
+          uAt(px, py); var hz = HZ_;
+          var vI = P.length / 3;
+          P.push(px, py, ks[m] === 0 ? hz - rOf(hz) : zTop(lv, hz));
+          XK.set(key0 + ks[m], vI);
+        }
+        void lastT;
+      }
+      function crossVert(eid, na, nb, k) {
+        var key = eid * (K + 1) + k, vI = XK.get(key);
+        if (vI === undefined) { edgeCrossings(eid, na, nb); vI = XK.get(key); }
+        return vI;
+      }
+      // boundary walk of one CCW grid triangle -> convex band polygons
+      var pv = new Int32Array(64), pval = new Float64Array(64), pz = new Int8Array(64);
+      function sliceTri(na, nb, nc, eab, ebc, eca) {
+        var cnt = 0;
+        var tri = [na, nb, nc], eds = [eab, ebc, eca];
+        for (var e = 0; e < 3; e++) {
+          var pa = tri[e], pb = tri[(e + 1) % 3], ua = U[pa], ub = U[pb];
+          pv[cnt] = -1 - pa; pval[cnt] = ua; pz[cnt] = 0; cnt++;
+          var eid = eds[e];
+          // the edge record is stored canonically (lower node first)
+          var lo = Math.min(ua, ub), hi = Math.max(ua, ub);
+          if (ua > ub) { for (var k = 0; k <= K; k++) if (L[k] > lo && L[k] < hi) { pv[cnt] = crossVert(eid, Math.min(pa, pb), Math.max(pa, pb), k); pval[cnt] = L[k]; pz[cnt] = k === 0 ? 1 : 0; cnt++; } }
+          else { for (k = K; k >= 0; k--) if (L[k] > lo && L[k] < hi) { pv[cnt] = crossVert(eid, Math.min(pa, pb), Math.max(pa, pb), k); pval[cnt] = L[k]; pz[cnt] = k === 0 ? 1 : 0; cnt++; } }
+        }
+        var poly = [], isZ = [];
+        for (var b = 1; b <= K + 1; b++) {
+          var hiL = L[b - 1], loL = b <= K ? L[b] : -Infinity;
+          poly.length = 0; isZ.length = 0;
+          for (var c = 0; c < cnt; c++) {
+            if (pval[c] <= hiL && pval[c] >= loL) {
+              poly.push(pv[c] < 0 ? nodeVert(-1 - pv[c]) : pv[c]); isZ.push(b === 1 && pz[c] === 1);
+            }
+          }
+          var m = poly.length; if (m < 3) continue;
+          for (var t = 1; t + 1 < m; t++) T.push(poly[0], poly[t], poly[t + 1]);
+          if (b === 1) for (t = 0; t < m; t++) if (isZ[t] && isZ[(t + 1) % m]) W.push(poly[t], poly[(t + 1) % m]);
+        }
+      }
+      for (var si = 0; si < sliced.length; si += 2) {
+        var ci = sliced[si], cj = sliced[si + 1];
+        var na0 = cj * NX + ci, nb0 = na0 + 1, nc0 = na0 + NX + 1, nd0 = na0 + NX;
+        var eH0 = 3 * na0, eV1 = 3 * nb0 + 1, eH2 = 3 * nd0, eV0 = 3 * na0 + 1, eD = 3 * na0 + 2;
+        if (Math.abs(U[na0] - U[nc0]) <= Math.abs(U[nb0] - U[nd0])) { // diagonal a-c
+          sliceTri(na0, nb0, nc0, eH0, eV1, eD);
+          sliceTri(na0, nc0, nd0, eD, eH2, eV0);
+        } else { // diagonal b-d
+          sliceTri(na0, nb0, nd0, eH0, eD, eV0);
+          sliceTri(nb0, nc0, nd0, eV1, eH2, eD);
+        }
+        if ((si & 4095) === 0) progress(0.5 + 0.3 * si / sliced.length);
+      }
+      var tTop = now();
+
+      // ── simplify the top sheet (boundary = wall ring stays fixed), then compact
+      var fixed = new Uint8Array(P.length / 3);
+      for (t = 0; t < W.length; t++) fixed[W[t]] = 1;
+      var nT0 = T.length / 3;
+      if (job.simplify !== false) T = simplifySheet(P, T, fixed, Q.tolQ * Q.tolQ, function (p) { progress(0.8 + 0.12 * p); });
+      var remap = new Int32Array(P.length / 3).fill(-1), P2 = [];
+      for (t = 0; t < T.length; t++) { var vv = T[t]; if (remap[vv] < 0) { remap[vv] = P2.length / 3; P2.push(P[3 * vv], P[3 * vv + 1], P[3 * vv + 2]); } T[t] = remap[vv]; }
+      for (t = 0; t < W.length; t++) W[t] = remap[W[t]];
+      P = P2;
+      var tSimp = now();
+
+      // ── assemble: top, mirrored bottom, walls
+      var nTop = P.length / 3, nT = T.length / 3, nW = W.length / 2;
+      var pos = new Float32Array(nTop * 6), idx = new Uint32Array((nT * 2 + nW * 2) * 3);
+      for (var vI = 0; vI < nTop; vI++) {
+        pos[3 * vI] = P[3 * vI]; pos[3 * vI + 1] = P[3 * vI + 1]; pos[3 * vI + 2] = P[3 * vI + 2];
+        var o = 3 * (vI + nTop); pos[o] = P[3 * vI]; pos[o + 1] = P[3 * vI + 1]; pos[o + 2] = -P[3 * vI + 2];
+      }
+      var w3 = 0;
+      for (t = 0; t < nT; t++) { idx[w3++] = T[3 * t]; idx[w3++] = T[3 * t + 1]; idx[w3++] = T[3 * t + 2]; }
+      for (t = 0; t < nT; t++) { idx[w3++] = T[3 * t] + nTop; idx[w3++] = T[3 * t + 2] + nTop; idx[w3++] = T[3 * t + 1] + nTop; }
+      for (t = 0; t < nW; t++) {
+        var ea = W[2 * t], eb = W[2 * t + 1];
+        idx[w3++] = eb; idx[w3++] = ea; idx[w3++] = ea + nTop;
+        idx[w3++] = eb; idx[w3++] = ea + nTop; idx[w3++] = eb + nTop;
+      }
+
+      // ── normals: gradient of the bicubic-smoothed solid (the field the shader's normalAt() shades with)
+      var BS0 = 0;
+      function bsW(t, out) { var t2 = t * t, t3 = t2 * t; out[0] = (1 - 3 * t + 3 * t2 - t3) / 6; out[1] = (4 - 6 * t2 + 3 * t3) / 6; out[2] = (1 + 3 * t + 3 * t2 - 3 * t3) / 6; out[3] = t3 / 6; }
+      var wxA = new Float64Array(4), wyA = new Float64Array(4);
+      function fS(x, y) {
+        var cx = clamp(x, -1, 1), cy = clamp(y, -1, 1);
+        var fx = (cx * 0.5 + 0.5) * s - 0.5, fy = (0.5 - cy * 0.5) * s - 0.5;
+        var ix = Math.floor(fx), iy = Math.floor(fy); bsW(fx - ix, wxA); bsW(fy - iy, wyA);
+        var a = 0, b = 0;
+        for (var dy = 0; dy < 4; dy++) {
+          var row = clamp(iy - 1 + dy, 0, s - 1) * s, wy = wyA[dy];
+          for (var dx = 0; dx < 4; dx++) { var ii = row + clamp(ix - 1 + dx, 0, s - 1), ww = wy * wxA[dx]; a += ww * RF[ii]; b += ww * GF[ii]; }
+        }
+        var o = Math.hypot(Math.max(Math.abs(x) - 1, 0), Math.max(Math.abs(y) - 1, 0));
+        BS0 = b + o; return a + o;
+      }
+      function sdfS(x, y, z) {
+        var d2 = fS(x, y), hz = hzOf(BS0), r = Math.min(bevel, hz * 0.98);
+        var wx = d2 + r, wy = Math.abs(z) - hz + r;
+        return Math.min(Math.max(wx, wy), 0) + Math.hypot(Math.max(wx, 0), Math.max(wy, 0)) - r;
+      }
+      var eps = 0.5 / s; // small step on the C2 bicubic field: tilts stay local (a wide step leaks the round-over into the face)
+      var nrm = new Float32Array(nTop * 6);
+      for (vI = 0; vI < nTop; vI++) {
+        var px = P[3 * vI], py = P[3 * vI + 1], pz0 = P[3 * vI + 2];
+        var a1 = sdfS(px + eps, py - eps, pz0 - eps), a2 = sdfS(px - eps, py - eps, pz0 + eps), a3 = sdfS(px - eps, py + eps, pz0 - eps), a4 = sdfS(px + eps, py + eps, pz0 + eps);
+        var gx = a1 - a2 - a3 + a4, gy = -a1 - a2 + a3 + a4, gz = -a1 + a2 - a3 + a4;
+        var len = Math.hypot(gx, gy, gz);
+        if (!(len > 1e-12)) { gx = 0; gy = 0; gz = 1; len = 1; }
+        gx /= len; gy /= len; gz /= len;
+        nrm[3 * vI] = gx; nrm[3 * vI + 1] = gy; nrm[3 * vI + 2] = gz;
+        o = 3 * (vI + nTop); nrm[o] = gx; nrm[o + 1] = gy; nrm[o + 2] = -gz;
+        if ((vI & 16383) === 0) progress(0.92 + 0.08 * vI / nTop);
+      }
+      // wall-ring vertices sit exactly where the round-over meets the wall: their true normal is horizontal
+      for (t = 0; t < W.length; t++) {
+        var q2 = W[t], qx = nrm[3 * q2], qy = nrm[3 * q2 + 1], ql = Math.hypot(qx, qy);
+        if (ql > 1e-6) { nrm[3 * q2] = qx / ql; nrm[3 * q2 + 1] = qy / ql; nrm[3 * q2 + 2] = 0; o = 3 * (q2 + nTop); nrm[o] = qx / ql; nrm[o + 1] = qy / ql; nrm[o + 2] = 0; }
+      }
+      progress(1);
+      return {
+        positions: pos, normals: nrm, indices: idx,
+        stats: { vertices: nTop * 2, triangles: idx.length / 3, levels: K, grid: [Nx, Ny], cell: h, leaves: leaves.length / 3, sliced: sliced.length / 2,
+                 trianglesBeforeSimplify: nT0 * 2 + nW * 2, ms: { nodes: tNodes - t0, top: tTop - tNodes, simplify: tSimp - tTop, total: now() - t0 } }
+      };
+    }
+
+    var isWorker = typeof WorkerGlobalScope !== 'undefined' && typeof self !== 'undefined' && self instanceof WorkerGlobalScope;
+    if (isWorker) {
+      self.onmessage = function (e) {
+        var job = e.data;
+        try {
+          var lastP = -1;
+          var m = buildMesh(job, function (p) { if (p - lastP >= 0.02 || p === 1) { lastP = p; self.postMessage({ progress: p }); } });
+          self.postMessage({ mesh: m }, [m.positions.buffer, m.normals.buffer, m.indices.buffer]);
+        } catch (err) { self.postMessage({ error: String((err && err.message) || err) }); }
+      };
+    }
+    return buildMesh;
+  }
+
+  /* =====================================================================================
+   * Main-thread API
+   * ===================================================================================== */
+  var localBuild = null;
+  function sourceOf(engine) {
+    var b = engine && (engine.beam || engine);
+    if (!b || !b.ok || !b.R || !b.G || !b.sh || !b.s) throw new Error('SpectraMesh: no shape loaded yet');
+    return { R: b.R, G: b.G, size: b.s, shape: { depth: b.sh.depth, bevel: b.sh.bevel, inflate: b.sh.inflate, inset: b.sh.inset }, extent: [b.ext[0], b.ext[1]] };
+  }
+  function abortErr() { var e = new Error('Export cancelled'); e.name = 'AbortError'; return e; }
+
+  /** engine -> Promise<{positions, normals, indices, stats}> in logo units (z = depth axis, centred on z=0).
+   *  opts: { quality: 'standard'|'high'|'draft', onProgress(f), signal (AbortSignal), worker: bool } */
+  function extract(engine, opts) {
+    opts = opts || {};
+    var src = sourceOf(engine);
+    var job = { R: new Float32Array(src.R), G: new Float32Array(src.G), size: src.size, shape: src.shape, extent: src.extent, quality: opts.quality || 'standard', simplify: opts.simplify !== false };
+    var onP = typeof opts.onProgress === 'function' ? opts.onProgress : function () {};
+    var signal = opts.signal;
+    if (signal && signal.aborted) return Promise.reject(abortErr());
+    var canWorker = opts.worker !== false && typeof Worker !== 'undefined' && typeof Blob !== 'undefined' && typeof URL !== 'undefined';
+    var runLocal = function () {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { // let the UI paint its busy state first
+          if (signal && signal.aborted) { reject(abortErr()); return; }
+          try { if (!localBuild) localBuild = spectraMeshCore(); resolve(localBuild(job, onP)); } catch (e) { reject(e); }
+        }, 30);
+      });
+    };
+    if (!canWorker) return runLocal();
+    return new Promise(function (resolve, reject) {
+      var w, url;
+      try {
+        url = URL.createObjectURL(new Blob(['(' + spectraMeshCore.toString() + ')();'], { type: 'text/javascript' }));
+        w = new Worker(url);
+      } catch (e) { if (url) URL.revokeObjectURL(url); runLocal().then(resolve, reject); return; }
+      var done = false;
+      var finish = function () { done = true; try { w.terminate(); } catch (e) { /* noop */ } URL.revokeObjectURL(url); if (signal) signal.removeEventListener('abort', onAbort); };
+      var onAbort = function () { if (done) return; finish(); reject(abortErr()); };
+      if (signal) signal.addEventListener('abort', onAbort);
+      w.onmessage = function (e) {
+        var d = e.data || {};
+        if (d.progress != null) { onP(d.progress); return; }
+        if (done) return;
+        finish();
+        if (d.error) reject(new Error(d.error)); else resolve(d.mesh);
+      };
+      w.onerror = function (ev) { if (done) return; if (ev && ev.preventDefault) ev.preventDefault(); finish(); runLocal().then(resolve, reject); }; // CSP etc.
+      w.postMessage(job); // copy, don't transfer: the runLocal() fallback (e.g. CSP blocks blob: workers -> async onerror) still needs job.R/G
+    });
+  }
+
+  function bounds(pos) {
+    var mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+    for (var i = 0; i < pos.length; i += 3) for (var k = 0; k < 3; k++) { var v = pos[i + k]; if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v; }
+    return { min: mn, max: mx };
+  }
+  function utf8(str) { return new TextEncoder().encode(str); }
+
+  /** glTF 2.0 binary. Metres, +Y up, logo facing +Z, centred, longest side = size (default 0.2 m). */
+  function toGLB(mesh, opts) {
+    opts = opts || {};
+    var name = String(opts.name || 'Spectra logo').slice(0, 80);
+    var size = opts.size || 0.2, material = opts.material === 'chrome' ? 'chrome' : 'glass';
+    var src = mesh.positions, nV = src.length / 3, bb = bounds(src);
+    var c = [(bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2, (bb.min[2] + bb.max[2]) / 2];
+    var k = size / Math.max(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], 1e-9);
+    var pos = new Float32Array(src.length);
+    for (var i = 0; i < src.length; i += 3) { pos[i] = (src[i] - c[0]) * k; pos[i + 1] = (src[i + 1] - c[1]) * k; pos[i + 2] = (src[i + 2] - c[2]) * k; }
+    var nrm = mesh.normals, bp = bounds(pos);
+    var big = nV > 65535, ind = big ? new Uint32Array(mesh.indices) : new Uint16Array(mesh.indices);
+    var pad4 = function (n) { return (n + 3) & ~3; };
+    var offPos = 0, offNrm = pad4(pos.byteLength), offIdx = offNrm + pad4(nrm.byteLength), binLen = pad4(offIdx + ind.byteLength);
+    var thickness = (bb.max[2] - bb.min[2]) * k;
+    var mat = material === 'glass' ? {
+      name: 'Spectra glass',
+      pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0, roughnessFactor: 0.02 },
+      extensions: {
+        KHR_materials_transmission: { transmissionFactor: 1 },
+        KHR_materials_ior: { ior: 1.5 },
+        KHR_materials_volume: { thicknessFactor: +thickness.toFixed(5) },
+        KHR_materials_dispersion: { dispersion: 1 } // 20/Abbe: Abbe ≈ 20, a strong flint — visible fringes like the on-screen fan
+      }
+    } : {
+      name: 'Spectra chrome',
+      pbrMetallicRoughness: { baseColorFactor: [0.96, 0.96, 0.97, 1], metallicFactor: 1, roughnessFactor: 0.05 }
+    };
+    var json = {
+      asset: { version: '2.0', generator: 'Spectra (spectra mesh export)' },
+      extensionsUsed: material === 'glass' ? ['KHR_materials_transmission', 'KHR_materials_ior', 'KHR_materials_volume', 'KHR_materials_dispersion'] : undefined,
+      scene: 0,
+      scenes: [{ name: name, nodes: [0] }],
+      nodes: [{ name: name, mesh: 0 }],
+      meshes: [{ name: name, primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, material: 0, mode: 4 }] }],
+      materials: [mat],
+      buffers: [{ byteLength: binLen }],
+      bufferViews: [
+        { buffer: 0, byteOffset: offPos, byteLength: pos.byteLength, byteStride: 12, target: 34962 },
+        { buffer: 0, byteOffset: offNrm, byteLength: nrm.byteLength, byteStride: 12, target: 34962 },
+        { buffer: 0, byteOffset: offIdx, byteLength: ind.byteLength, target: 34963 }
+      ],
+      accessors: [
+        { bufferView: 0, componentType: 5126, count: nV, type: 'VEC3', min: bp.min.map(Math.fround), max: bp.max.map(Math.fround) },
+        { bufferView: 1, componentType: 5126, count: nV, type: 'VEC3' },
+        { bufferView: 2, componentType: big ? 5125 : 5123, count: ind.length, type: 'SCALAR' }
+      ]
+    };
+    if (!json.extensionsUsed) delete json.extensionsUsed;
+    var jb = utf8(JSON.stringify(json)), jLen = pad4(jb.length);
+    var total = 12 + 8 + jLen + 8 + binLen, out = new Uint8Array(total), dv = new DataView(out.buffer);
+    dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
+    dv.setUint32(12, jLen, true); dv.setUint32(16, 0x4E4F534A, true);
+    out.set(jb, 20); for (i = 20 + jb.length; i < 20 + jLen; i++) out[i] = 0x20;
+    var b0 = 20 + jLen; dv.setUint32(b0, binLen, true); dv.setUint32(b0 + 4, 0x004E4942, true);
+    var d0 = b0 + 8;
+    out.set(new Uint8Array(pos.buffer, pos.byteOffset, pos.byteLength), d0 + offPos);
+    out.set(new Uint8Array(nrm.buffer, nrm.byteOffset, nrm.byteLength), d0 + offNrm);
+    out.set(new Uint8Array(ind.buffer, ind.byteOffset, ind.byteLength), d0 + offIdx);
+    return out;
+  }
+
+  /** Binary STL. Millimetres, Z up, lying flat on the plate (min z = 0), longest side = size (default 100 mm). */
+  function toSTL(mesh, opts) {
+    opts = opts || {};
+    var size = opts.size || 100, src = mesh.positions, I = mesh.indices, bb = bounds(src);
+    var c = [(bb.min[0] + bb.max[0]) / 2, (bb.min[1] + bb.max[1]) / 2];
+    var k = size / Math.max(bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], 1e-9);
+    var nT = I.length / 3, out = new Uint8Array(84 + nT * 50), dv = new DataView(out.buffer);
+    var head = utf8(('Spectra STL ' + String(opts.name || '')).slice(0, 79));
+    out.set(head, 0); dv.setUint32(80, nT, true);
+    var X = function (i) { return (src[3 * i] - c[0]) * k; }, Y = function (i) { return (src[3 * i + 1] - c[1]) * k; }, Zf = function (i) { return (src[3 * i + 2] - bb.min[2]) * k; };
+    var o = 84;
+    for (var t = 0; t < nT; t++) {
+      var a = I[3 * t], b = I[3 * t + 1], cc = I[3 * t + 2];
+      var ax = X(a), ay = Y(a), az = Zf(a), bx = X(b), by = Y(b), bz = Zf(b), cx = X(cc), cy = Y(cc), cz = Zf(cc);
+      var ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
+      var nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, nl = Math.hypot(nx, ny, nz) || 1;
+      dv.setFloat32(o, nx / nl, true); dv.setFloat32(o + 4, ny / nl, true); dv.setFloat32(o + 8, nz / nl, true);
+      dv.setFloat32(o + 12, ax, true); dv.setFloat32(o + 16, ay, true); dv.setFloat32(o + 20, az, true);
+      dv.setFloat32(o + 24, bx, true); dv.setFloat32(o + 28, by, true); dv.setFloat32(o + 32, bz, true);
+      dv.setFloat32(o + 36, cx, true); dv.setFloat32(o + 40, cy, true); dv.setFloat32(o + 44, cz, true);
+      dv.setUint16(o + 48, 0, true); o += 50;
+    }
+    return out;
+  }
+
+  /** One-shot: engine -> Promise<{ bytes: Uint8Array, mime, ext, stats }>. format 'glb' | 'stl'. */
+  function exportFile(engine, format, opts) {
+    opts = opts || {};
+    var material = opts.material || (engine && engine.getMaterial ? engine.getMaterial() : 'glass');
+    return extract(engine, opts).then(function (mesh) {
+      if (opts.signal && opts.signal.aborted) throw abortErr();
+      var bytes = format === 'stl' ? toSTL(mesh, opts) : toGLB(mesh, { name: opts.name, material: material, size: opts.size });
+      return { bytes: bytes, mime: format === 'stl' ? 'model/stl' : 'model/gltf-binary', ext: format === 'stl' ? 'stl' : 'glb', stats: mesh.stats, mesh: mesh };
+    });
+  }
+
+  global.SpectraMesh = { extract: extract, toGLB: toGLB, toSTL: toSTL, export: exportFile, _core: spectraMeshCore };
+})(typeof window !== 'undefined' ? window : this);
 
 ;
 /* Spectra v2 — src/ui2.js
@@ -2478,7 +3311,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Spectra UI] engine.' + name, e); } };
 
     let material = 'glass', uiHidden = false, paused = false;
-    let buildToken = 0, activeSample = null, exporting = null;
+    let buildToken = 0, activeSample = null, exporting = null, logoName = '';
 
     /* ───── toast ───── */
     const toastEl = $('#sp-toast'); let toastT = 0;
@@ -2497,24 +3330,24 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 
     /* ───── material ───── */
     function placeIndicator(anim) {
-      const b = $('button[aria-checked="true"]', seg); if (!b) return;
+      if (!seg) return; const b = $('button[aria-checked="true"]', seg); if (!b) return;
       if (!anim) seg.classList.add('no-anim');
       ind.style.setProperty('--x', b.offsetLeft + 'px');
       ind.style.setProperty('--w', b.offsetWidth + 'px');
       if (!anim) { void ind.offsetWidth; seg.classList.remove('no-anim'); }
     }
     function setMaterial(m, anim) {
-      if (m !== 'glass' && m !== 'chrome') return;
+      if (m !== 'glass') return; // chrome hidden for now
       material = m;
-      $$('button[data-material]', seg).forEach((b) => {
+      if (seg) $$('button[data-material]', seg).forEach((b) => {
         const on = b.dataset.material === m;
         b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
       });
       placeIndicator(anim !== false);
       call('setMaterial', m);
     }
-    seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b) setMaterial(b.dataset.material); });
-    seg.addEventListener('keydown', (e) => {
+    if (seg) seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b) setMaterial(b.dataset.material); });
+    if (seg) seg.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault(); const m = material === 'glass' ? 'chrome' : 'glass';
         setMaterial(m); $('button[data-material="' + m + '"]', seg).focus();
@@ -2621,7 +3454,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     function loadSample(i, quiet) {
       const s = samples[i]; if (!s) return;
       const sid = s.id || String(i); activeSample = sid; markSample(sid, true);
-      return buildField({ type: 'svg', text: s.svg }, { sid, done: quiet ? null : s.name });
+      return buildField({ type: 'svg', text: s.svg }, { sid, done: quiet ? null : s.name, name: s.name || sid });
     }
     async function buildField(source, opts) {
       opts = opts || {};
@@ -2634,6 +3467,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         if (token !== buildToken) return;
         call('setField', field);
         markSample(opts.sid || null, false);
+        logoName = opts.name || '';
         if (opts.done) toast(opts.done);
       } catch (e) {
         console.error('[Spectra UI] build failed', e);
@@ -2656,9 +3490,9 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         let text = '';
         try { text = await file.text(); } catch (e) { toast('Couldn’t open ' + short, 'err'); return; }
         if (!/<svg[\s>]/i.test(text)) { toast(short + ' isn’t a valid SVG', 'err', 3200); return; }
-        return buildField({ type: 'svg', text }, { done: 'Using ' + short });
+        return buildField({ type: 'svg', text }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
       }
-      return buildField({ type: 'image', blob: file }, { done: 'Using ' + short });
+      return buildField({ type: 'image', blob: file }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
     }
     const fileIn = $('#sp-file');
     $('#sp-pick').addEventListener('click', () => fileIn.click());
@@ -2668,7 +3502,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       e.preventDefault();
       const w = wordIn.value.trim(); if (!w) return;
       activeSample = null; markSample(null);
-      buildField({ type: 'text', text: w, fontFamily: '"Instrument Sans", Inter, system-ui, sans-serif', fontWeight: 700 }, { done: 'Using “' + w + '”' });
+      buildField({ type: 'text', text: w, fontFamily: '"Instrument Sans", Inter, system-ui, sans-serif', fontWeight: 700 }, { done: 'Using “' + w + '”', name: w });
       wordIn.blur(); close();
     });
 
@@ -2711,6 +3545,9 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     /* ───── export ───── */
     const xpPng = $('#sp-xp-png'), xpMp4 = $('#sp-xp-mp4'), mp4Wrap = $('#sp-xp-mp4-wrap');
     const prog = $('#sp-prog'), progFill = $('#sp-prog-fill'), progPct = $('#sp-prog-pct'), progLabel = $('#sp-prog-label');
+    const xp3d = $('#sp-xp-3d'), xpGlb = $('#sp-xp-glb'), xpStl = $('#sp-xp-stl');
+    const Mesh = deps.SpectraMesh || global.SpectraMesh || null;
+    let meshAbort = null;
     const canVideo = () => { try { return !!Engine.canRenderVideo; } catch (e) { return false; } };
     function viewSize() { return [Math.max(1, canvas.clientWidth || window.innerWidth), Math.max(1, canvas.clientHeight || window.innerHeight)]; }
     function pngSize() { const v = viewSize(); let W = v[0] * 2, H = v[1] * 2; const m = Math.max(W, H); if (m > 8192) { W *= 8192 / m; H *= 8192 / m; } return [Math.round(W), Math.round(H)]; }
@@ -2722,6 +3559,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       $('#sp-xp-mp4-s').textContent = v[0] + '×' + v[1] + ', 6s';
       mp4Wrap.hidden = !canVideo();
       xpPng.disabled = !!exporting; xpMp4.disabled = !!exporting;
+      xp3d.hidden = !Mesh;
+      const noShape = !(engine && engine.beam && engine.beam.ok);
+      xpGlb.disabled = !!exporting || noShape; xpStl.disabled = !!exporting || noShape;
+      if (noShape && !exporting && !popExport.hidden) { clearTimeout(refreshExport._t); refreshExport._t = setTimeout(refreshExport, 250); } // enable once the shape is ready
     }
     function setProg(f, label) {
       f = clamp(f || 0, 0, 1);
@@ -2762,7 +3603,30 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         exporting = null; prog.hidden = true; xpMp4.hidden = false; refreshExport();
       }
     });
-    $('#sp-cancel').addEventListener('click', () => { call('cancelRender'); });
+    /* 3D model: GLB (glTF 2.0, metres, Y-up) / STL (mm, Z-up, flat on the plate). Meshing runs in a worker. */
+    function slug(s) { return String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'logo'; }
+    async function exportMesh(format, btn, wrap, high) {
+      if (exporting || !Mesh) return;
+      exporting = format; refreshExport();
+      const home = prog.parentNode, label = format === 'glb' ? 'Building GLB' : 'Building STL';
+      wrap.appendChild(prog); btn.hidden = true; prog.hidden = false; setProg(0, high ? label + ' · fine' : label);
+      $('#sp-cancel').focus();
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null; meshAbort = ctl;
+      try {
+        const r = await Mesh.export(engine, format, { quality: high ? 'high' : 'standard', name: logoName || 'Spectra logo', material, signal: ctl && ctl.signal, onProgress: (f) => setProg(f * 0.96) });
+        setProg(1, 'Saving');
+        const blob = new Blob([r.bytes], { type: r.mime });
+        await saveBlob(blob, 'spectra-' + slug(logoName) + '-' + stamp() + '.' + r.ext);
+        close();
+      } catch (e) {
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] mesh export', e); toast(format.toUpperCase() + ' export failed', 'err'); }
+      } finally {
+        meshAbort = null; exporting = null; prog.hidden = true; btn.hidden = false; home.appendChild(prog); refreshExport();
+      }
+    }
+    xpGlb.addEventListener('click', (e) => exportMesh('glb', xpGlb, $('#sp-xp-glb-wrap'), e.shiftKey));
+    xpStl.addEventListener('click', (e) => exportMesh('stl', xpStl, $('#sp-xp-stl-wrap'), e.shiftKey));
+    $('#sp-cancel').addEventListener('click', () => { if (meshAbort) meshAbort.abort(); else call('cancelRender'); });
 
     /* ───── pointer → engine ───── */
     let hinted = false, drag = null;
@@ -2808,9 +3672,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      if (k === 'g') setMaterial('glass');
-      else if (k === 'c') setMaterial('chrome');
-      else if (k === 'h') setHidden(!uiHidden);
+      if (k === 'h') setHidden(!uiHidden);
       else if (e.key === ' ' || e.code === 'Space') {
         if (t && t.tagName === 'BUTTON' && t.matches(':focus-visible')) return; // keyboard users: Space activates the focused button
         e.preventDefault();
@@ -2836,7 +3698,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 
     /* ───── boot ───── */
     try { const m = engine && engine.getMaterial && engine.getMaterial(); if (m === 'glass' || m === 'chrome') material = m; } catch (e) { /* noop */ }
-    setMaterial(material, false);
+    material = 'glass'; setMaterial(material, false);
+    setTheme('light'); // the light background is the only one for now
     insets();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { placeIndicator(false); insets(); });
     requestAnimationFrame(() => ui.classList.add('is-in')); // don't wait on 'ready' forever
