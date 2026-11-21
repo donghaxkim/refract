@@ -1852,7 +1852,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   /** One emission line's colour: zucconi hue (matches the rainbow), more saturated (a line is monochromatic), zucconi luminance;
    *  past the palette's red/violet ends the brightness follows the eye's sensitivity so deep-red neon lines don't vanish. */
   function lineRGB(l) {
-    const lc = clamp(l, 406, 678), z = zucconi(lc), n = BEAM_NORM, c = [z[0] * n[0], z[1] * n[1], z[2] * n[2]];
+    const lc = clamp(l, 406, 678), z = zucconi(lc), n = BEAM_NORM; let c = [z[0] * n[0], z[1] * n[1], z[2] * n[2]];
+    // violet–blue end: zucconi's fit swings back towards red too early (Hg 435.8 read magenta, 404.7 pure blue); take CIE's hue there
+    const tv = clamp((465 - l) / 25, 0, 1), wv = tv * tv * (3 - 2 * tv);
+    if (wv > 0) { const q = lamRGB(l), k = LUM(c) / (LUM(q) || 1); c = c.map((v, i) => lerp(v, q[i] * k, wv)); }
     const y0 = LUM(c), m = Math.min(c[0], c[1], c[2]) * 0.85; let s = c.map(v => v - m); const y1 = LUM(s) || 1;
     s = s.map(v => v * y0 / y1);
     const k = l === lc ? 1 : cieY(l) / cieY(lc);
@@ -1890,6 +1893,9 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   const SURF_GLSL = `const float WALL_Z = ${WALL_Z.toFixed(4)}, FLOOR_Y = ${FLOOR_Y.toFixed(4)}, COVE_R = ${COVE_R.toFixed(4)}, COVE_Y = ${COVE_Y.toFixed(4)}, COVE_Z = ${COVE_Z.toFixed(4)};`;
   // idle resting aim: light from the upper left (was π + 0.2, lower left), so the rainbow lands on the studio floor
   const REST_ANG = Math.PI - 0.2;
+  const POOL = [40, 9, 6, 0.16]; // dark theme: soft pool around a landing (× core width along, × slit height, its softness, share of the light)
+  const ENTRY_K = 0.8;
+  const LINE_LIGHT_K = 3.5; // light theme: thin, saturated emission-line beams wash out on the paper wall, so they get more power there // pool where an incoming beam rises out of the floor, relative to a full landing
 
   // ───────────────────────────────────────── shaders
   const VERT = `#version 300 es
@@ -2608,6 +2614,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     _resizeMain() { const [w, h] = this._internal(); if (this.main.scene && this.main.w === w && this.main.h === h) return; this._free(this.main); this.main = this._pipe(w, h); this._dirty = true; }
     _applyLook() {
       const gl = this.gl, L = LOOKS[this.material], u = this.p.glass.u, fi = this.fi;
+      this._lookGen = (this._lookGen || 0) + 1; // shape / material / source / logo changed (rest pose cache)
       gl.useProgram(this.p.glass.p);
       gl.uniform1i(u.uMaterial, this.material === 'glass' ? 0 : 1);
       gl.uniform1f(u.uIor, IOR);
@@ -2654,55 +2661,115 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const o = [perp[0] * off - dir[0] * 6, perp[1] * off - dir[1] * 6, 0];
       return { o, dir, perp };
     }
-    /** Pick the line through the logo whose exit spectrum is widest (hollow / symmetric logos cancel dispersion). */
-    _bestOffset(ang, R) {
-      if (!this.beam.ok || this.material === 'chrome') return 0.06;
-      let best = 0.06, bestScore = -1; const lo = this._src.lo, hi = this._src.hi; // probe the source's own wavelength span
+    /** Score every line through the logo (fixed grid of offsets) by how widely it splits the source's span: { offs, scores }.
+     *  -Infinity = no single coherent route for all colours. */
+    _routeScan(ang, R) {
+      const lo = this._src.lo, hi = this._src.hi; // probe the source's own wavelength span
       const ext = Math.max(this.fi.extent[0], this.fi.extent[1]);
       const last = (P) => { const a = P[P.length - 1], b = P[P.length - 2]; return norm3([a[0] - b[0], a[1] - b[1], a[2] - b[2]]); };
-      const cur = this._bestOff; let curScore = -1;
-      for (let o = -ext * 0.85; o <= ext * 0.85 + 1e-6; o += ext * 0.05) {
+      const offs = [], scores = [];
+      for (let i = 0; i <= 34; i++) {
+        const o = -ext * 0.85 + i * ext * 0.05; offs.push(o); scores.push(-Infinity);
         const { o: org, dir } = this._beamRays(ang, o);
         const a = this.beam.trace(org, dir, lo, false, R); if (a.length < 4) continue;
         const b = this.beam.trace(org, dir, hi, false, R); if (b.length !== a.length) continue;
         const m = this.beam.trace(org, dir, (lo + hi) / 2, false, R); if (m.length !== a.length) continue; // one coherent route for all colours
         const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1));
         const e = Math.min(a[a.length - 1][5], b[b.length - 1][5]);
-        const score = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
-        if (score > bestScore) { bestScore = score; best = o; }
-        if (cur != null && Math.abs(o - cur) < ext * 0.051) curScore = Math.max(curScore, score);
+        scores[i] = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
       }
-      if (cur != null && curScore > 0.002 && bestScore < curScore + 0.02) return cur; // hysteresis: don't hop between near-equal lines
-      return bestScore > 0.002 ? best : 0.06;
+      return { offs, scores, ext };
     }
-    _buildBeam(ang, R) {
+    /** Best line of a scan; with hysteresis against `cur` (kept while cur itself is still a good, coherent line). 0.06 = none. */
+    _pickRoute(S, cur) {
+      let bi = -1, bestScore = -1;
+      S.scores.forEach((v, i) => { if (v > bestScore) { bestScore = v; bi = i; } });
+      if (cur != null) { const i = Math.round((cur - S.offs[0]) / (S.ext * 0.05));
+        const curScore = i >= 0 && i < S.offs.length && Math.abs(S.offs[i] - cur) < S.ext * 0.01 ? S.scores[i] : -1;
+        if (curScore > 0.002 && bestScore < curScore + 0.02) return S.offs[i]; } // hysteresis: don't hop between near-equal lines
+      return bestScore > 0.002 ? S.offs[bi] : 0.06;
+    }
+    /** Pick the line through the logo whose exit spectrum is widest (hollow / symmetric logos cancel dispersion). */
+    _bestOffset(ang, R, cur = this._bestOff) {
+      if (!this.beam.ok || this.material === 'chrome') return 0.06;
+      return this._pickRoute(this._routeScan(ang, R), cur);
+    }
+    /** Idle resting aim: _restAng (light from the upper left) unless no line through this logo splits the light there; then its
+     *  mirror (lower left, the original rest), then the nearest angle that does. Cached per look / logo / spin. */
+    _restPose() {
+      const pref = this._restAng; if (!this.beam.ok || this.material === 'chrome' || !this.field) return pref;
+      const r = this.rot; if (this._restC && (r.drag || r.vy || r.vp)) return this._restC.ang; // still spinning: keep the last choice
+      const key = [this._lookGen, this.field.size, pref, r.yaw.toFixed(2), r.pitch.toFixed(2)].join('|');
+      if (this._restC && this._restC.key === key) return this._restC.ang;
+      const R = rotYX(r.yaw, r.pitch), good = (a) => Math.max(...this._routeScan(a, R).scores), TH = 0.01;
+      let ang = pref;
+      if (good(pref) < TH) {
+        const mir = -pref; let bestA = pref, bestS = -1;
+        if (good(mir) >= TH) ang = mir;
+        else { search: for (const d of [0.08, 0.16, 0.24, 0.32]) for (const a of [pref + d, pref - d, mir - d, mir + d]) { // nearest first
+            const sc = good(a); if (sc > bestS + 1e-3) { bestS = sc; bestA = a; } if (sc >= TH) break search; }
+          ang = bestS > 0.002 ? bestA : pref; }
+      }
+      this._restC = { key, ang }; return ang;
+    }
+    _buildBeam(ang, R, surf = !this.transparent) { // surf: clip to / light up the studio room (off for transparent output)
       const mirror = this.material === 'chrome';
       const src = this._src, lines = src.kind === 'lines', bands = src.bands;
       const { o, dir, perp } = this._beamRays(ang);
       const waves = mirror ? 1 : bands.length;
-      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? 0.75 : 1); // lines: a slightly finer slit so neighbouring lines separate
-      const paths = [];
+      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK * (lines && THEMES[this.theme].mode ? LINE_LIGHT_K : 1); const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? (THEMES[this.theme].mode ? 1 : 0.75) : 1); // lines: a slightly finer slit so neighbouring lines separate
+      const paths = []; // transparent output has no visible room: no clipping, no caustics (the beam just leaves the frame)
+      let entry = null; const tot = [0, 0, 0];
       for (let k = 0; k < waves; k++) {
         const bc = mirror ? { lam: src.lamC, rgb: src.color } : bands[k];
         const P = this.beam.trace(o, dir, bc.lam, mirror, R);
-        paths.push({ P, rgb: bc.rgb, hit: this._clipToSurfaces(P) }); // ribbons end where the light lands
+        const e = surf ? this._clipEntry(P) : null; if (e && !entry) entry = e; // light from below the floor rises out of it
+        paths.push({ P, rgb: bc.rgb, hit: surf ? this._clipToSurfaces(P) : null }); // ribbons end where the light lands
+        tot[0] += bc.rgb[0]; tot[1] += bc.rgb[1]; tot[2] += bc.rgb[2];
       }
       const base = I0 / 1.4 / (mirror ? 1 : BEAM_WAVES); // band colours carry the source's power; Σ luminance = BEAM_WAVES
-      this._causticArr = this._buildCaustic(paths, base, w0, lines || mirror);
+      this._causticArr = surf ? this._buildCaustic(paths, base, w0, lines || mirror) : new Float32Array(0);
+      if (entry) { // where the incoming (still white) beam leaves the floor: a soft pool, so it reads as light bounced off the surface
+        const E = this._buildCaustic([{ rgb: tot.map(v => v * ENTRY_K), hit: entry }], base, w0, true), C = new Float32Array(this._causticArr.length + E.length);
+        C.set(this._causticArr); C.set(E, this._causticArr.length); this._causticArr = C;
+      }
       const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
       const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
       for (let k = 0; k < waves; k++) {
         const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
-        const same = !lines && !!B && A.length === B.length; // emission lines: separate ribbons, no sheet between them
-        const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
+        const rq = B ? this._routeQ(A, B) : 0, same = !lines && rq > 0; // emission lines: separate ribbons, no sheet between them
+        const nb = same ? B : (Bp && this._routeQ(A, Bp) > 0 ? Bp : null);
         const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : 0;
         for (let i = 0; i + 1 < A.length; i++) {
           const n = nRef(i, A);
           this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror || lines ? 0 : 1, n);
-          if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base, w0, n);
+          if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base * rq, w0, n);
         }
       }
       return new Float32Array(V);
+    }
+    /** How surely two neighbouring bands took the same route through the glass (1 = same, 0 = different): same vertex count and
+     *  glass hit points that stay together (same-route neighbours sit < 0.005 apart; different faces are far apart). Smooth, no popping. */
+    _routeQ(A, B) {
+      if (A.length !== B.length) return 0; let m = 0;
+      for (let j = 1; j + 1 < A.length; j++) m = Math.max(m, Math.hypot(A[j][0] - B[j][0], A[j][1] - B[j][1], A[j][2] - B[j][2]));
+      return 1 - smooth01((m - 0.03) / 0.04);
+    }
+    /** An incoming beam that starts outside the room (below the floor): move its start (in place) to where it enters the room, so it is
+     *  never drawn inside a surface. Returns that point as a landing ({ p, n, d, q }) or null when the beam starts in the room. */
+    _clipEntry(P) {
+      if (!P.length || inRoom(P[0])) return null;
+      for (let i = 0; i + 1 < P.length; i++) {
+        const a = P[i], b = P[i + 1]; if (!inRoom(b)) continue; // the room is convex: the line enters it once
+        let lo = 0, hi = 1; for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2; if (inRoom(this._lerpPt(a, b, m))) hi = m; else lo = m; }
+        const q = this._lerpPt(a, b, hi); P.splice(0, i + 1, q);
+        let n = [0, 1, 0]; // floor, wall or cove: whichever the entry point lies on
+        if (q[2] < COVE_Z && q[1] < COVE_Y) { const dy = q[1] - COVE_Y, dz = q[2] - COVE_Z, l = Math.hypot(dy, dz) || 1; n = [0, -dy / l, -dz / l]; }
+        else if (q[2] - WALL_Z < q[1] - FLOOR_Y) n = [0, 0, 1];
+        const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(d[0], d[1], d[2]) || 1;
+        return { p: [q[0], q[1], q[2]], n, d: [d[0] / L, d[1] / L, d[2] / L], q };
+      }
+      return null;
     }
     /** Truncate a traced polyline (in place) at the first studio surface it reaches from inside the room. Returns the landing or null. */
     _clipToSurfaces(P) {
@@ -2747,10 +2814,19 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         for (let j = 0; j < K; j++) { const J = info[j]; if (!J) continue; const dd = Math.hypot(J.h.p[0] - I.h.p[0], J.h.p[1] - I.h.p[1], J.h.p[2] - I.h.p[2]); if (dd < I.sig * 2 + Math.hypot(I.b[0] - I.a[0], I.b[1] - I.a[1])) D += J.dens; }
         I.knee = 1 / Math.sqrt(1 + (D / Dk) * (D / Dk)); } // local irradiance saturates softly at ≈ Dk
       for (let k = 0; k < K; k++) { const I = info[k]; if (I) { this._splat(V, I, 1, I.knee); this._splat(V, I, 14, I.knee * 0.12); } } // core + soft halo
+      if (!T.mode) { // dark: the backdrop is unlit, so add one very soft, wide pool of scattered light around the landing (implies the floor)
+        const on = info.filter(Boolean), M = on[on.length >> 1];
+        const S = M ? on.filter(I => dot3(I.h.n, M.h.n) > 0.99) : [];
+        if (S.length) {
+          const tr = (I) => { const v = [I.h.p[0] - M.h.p[0], I.h.p[1] - M.h.p[1], I.h.p[2] - M.h.p[2]]; return [dot3(v, M.nn), dot3(v, M.bn)]; };
+          const P = [0, 0, 0]; S.forEach(I => { P[0] += I.P[0] * I.knee; P[1] += I.P[1] * I.knee; P[2] += I.P[2] * I.knee; });
+          this._splat(V, { h: M.h, nn: M.nn, bn: M.bn, a: tr(S[0]), b: tr(S[S.length - 1]), sig: POOL[0] * M.sig, hs: POOL[1] * M.hs, sv: POOL[2] * M.hs, P }, 0, POOL[3]);
+        }
+      }
       return new Float32Array(V);
     }
     _splat(V, I, scale, k) {
-      const { h, nn, bn, a, b } = I, sig = I.sig * scale, hs = I.hs * (scale > 1 ? 2.5 : 1), sv = I.sv * (scale > 1 ? 4 : 1);
+      const { h, nn, bn, a, b } = I, sig = I.sig * (scale || 1), hs = I.hs * (scale > 1 ? 2.5 : 1), sv = I.sv * (scale > 1 ? 4 : 1); // scale 0: I as given
       // tangent basis of the surface, and transverse(beam) → surface mapping
       const N = h.n; let t1 = cross(N, [1, 0, 0]); if (Math.hypot(...t1) < 0.2) t1 = cross(N, [0, 1, 0]); t1 = norm3(t1); const t2 = cross(N, t1);
       const m00 = dot3(nn, t1), m01 = dot3(nn, t2), m10 = dot3(bn, t1), m11 = dot3(bn, t2), det = m00 * m11 - m01 * m10;
@@ -2888,7 +2964,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       } else if (this.time - this.lastPointerT > 3.5 && !this.paused) {
         // idle: slow seamless drift of the light (6 s period)
         // idle: glide to a calm resting pose and stop, so the image settles into a crisp still
-        this.target.ang = this._restAng; this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
+        this.target.ang = this._restPose(); this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
       }
       // critically damped follow (angles wrap)
       const k = 1 - Math.exp(-dt * 2.6); // slow, critically damped follow: elegant, no jitter
@@ -2938,7 +3014,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     // ── offline rendering
     _wait() { const gl = this.gl; const s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); return new Promise(r => { const p = () => { if (gl.clientWaitSync(s, 0, 0) === gl.TIMEOUT_EXPIRED) { setTimeout(p, 2); return; } gl.deleteSync(s); r(); }; p(); }); }
     async _offlineFrame(P, pose, cam, spp, time, transparent) {
-      this._uploadBeam(this._buildBeam(pose.ang, rotYX(pose.yaw, pose.pitch)));
+      this._uploadBeam(this._buildBeam(pose.ang, rotYX(pose.yaw, pose.pitch), !transparent));
       for (let i = 0; i < spp; i++) {
         if (this._cancel) throw Object.assign(new Error('Render cancelled'), { name: 'AbortError' });
         this._sample(P, pose, 1 / (i + 1), cam, i + 1, ((i + 0.5) / spp + 0.137) % 1);
@@ -3001,16 +3077,33 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         await enc.flush(); if (err) throw err; muxer.finalize(); return new Blob([target.buffer], { type: 'video/mp4' });
       } finally { if (enc) { try { enc.close(); } catch (e) { /* closed */ } } if (P) this._free(P); this.busy = false; this._dirty = true; }
     }
+    /** The beam's line through the logo for every frame of a seamless loop, temporally coherent: one line for the whole loop when
+     *  some line splits the light coherently in every frame (preferring the live one), else the live behaviour replayed
+     *  periodically: hysteresis against the previous frame and the 1.4/s glide, run twice round the loop so it wraps seamlessly. */
+    _loopRoute(frames, fps, poseAt) {
+      if (!this.beam.ok || this.material === 'chrome') return new Array(frames).fill(0.06);
+      const S = []; for (let f = 0; f < frames; f++) { const p = poseAt(f); S.push(this._routeScan(p.ang, rotYX(p.yaw, p.pitch))); }
+      const n = S[0].offs.length; let bi = -1, bm = -1, li = -1, lm = -1;
+      const cur = this._bestOff != null ? Math.round((this._bestOff - S[0].offs[0]) / (S[0].ext * 0.05)) : -1;
+      for (let i = 0; i < n; i++) { let mn = Infinity, sum = 0; for (const s of S) { mn = Math.min(mn, s.scores[i]); sum += s.scores[i]; }
+        if (mn <= 0.002) continue; const mean = sum / frames; if (mean > bm) { bm = mean; bi = i; } if (i === cur) { li = i; lm = mean; } }
+      if (li >= 0 && lm >= bm - 0.02) bi = li;
+      if (bi >= 0) return new Array(frames).fill(S[0].offs[bi]);
+      const tgt = new Array(frames), out = new Array(frames), k = 1 - Math.exp(-1.4 / fps); let c = this._bestOff, x = null;
+      for (let pass = 0; pass < 2; pass++) for (let f = 0; f < frames; f++) { c = this._pickRoute(S[f], c); tgt[f] = c; }
+      for (let pass = 0; pass < 2; pass++) for (let f = 0; f < frames; f++) { x = x == null ? tgt[f] : x + (tgt[f] - x) * k; out[f] = x; }
+      return out;
+    }
     /** Seamless loop: the light sweeps across the logo and back over `seconds`. Any width×height (aspect = width/height). */
     async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
       const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2;
       const frames = Math.round(fps * seconds), cam = this._offlineCam(w, h), base = this._pose(), keepOff = this.aimOff;
+      const poseAt = (f) => { const ph = 2 * Math.PI * f / fps / seconds; return { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) }; };
+      const offs = this._loopRoute(frames, fps, poseAt);
       try {
         return await this._encodeFrames({ w, h, fps, frames, onProgress, render: (P, f) => {
-          const t = f / fps, ph = 2 * Math.PI * t / seconds;
-          const pose = { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) };
-          this.aimOff = this._bestOffset(pose.ang, rotYX(pose.yaw, pose.pitch));
-          return this._offlineFrame(P, pose, cam, spp, t * (12 / seconds), false);
+          this.aimOff = offs[f];
+          return this._offlineFrame(P, poseAt(f), cam, spp, f / fps * (12 / seconds), false);
         } });
       } finally { this.aimOff = keepOff; }
     }
