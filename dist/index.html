@@ -1890,6 +1890,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   const SURF_GLSL = `const float WALL_Z = ${WALL_Z.toFixed(4)}, FLOOR_Y = ${FLOOR_Y.toFixed(4)}, COVE_R = ${COVE_R.toFixed(4)}, COVE_Y = ${COVE_Y.toFixed(4)}, COVE_Z = ${COVE_Z.toFixed(4)};`;
   // idle resting aim: light from the upper left (was π + 0.2, lower left), so the rainbow lands on the studio floor
   const REST_ANG = Math.PI - 0.2;
+  const POOL = [40, 9, 6, 0.16]; // dark theme: soft pool around a landing (× core width along, × slit height, its softness, share of the light)
   const ENTRY_K = 0.8; // pool where an incoming beam rises out of the floor, relative to a full landing
 
   // ───────────────────────────────────────── shaders
@@ -2707,13 +2708,13 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       }
       this._restC = { key, ang }; return ang;
     }
-    _buildBeam(ang, R) {
+    _buildBeam(ang, R, surf = !this.transparent) { // surf: clip to / light up the studio room (off for transparent output)
       const mirror = this.material === 'chrome';
       const src = this._src, lines = src.kind === 'lines', bands = src.bands;
       const { o, dir, perp } = this._beamRays(ang);
       const waves = mirror ? 1 : bands.length;
       const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? 0.75 : 1); // lines: a slightly finer slit so neighbouring lines separate
-      const paths = [], surf = !this._noSurf; // transparent output has no visible room: no clipping, no caustics
+      const paths = []; // transparent output has no visible room: no clipping, no caustics (the beam just leaves the frame)
       let entry = null; const tot = [0, 0, 0];
       for (let k = 0; k < waves; k++) {
         const bc = mirror ? { lam: src.lamC, rgb: src.color } : bands[k];
@@ -2809,10 +2810,19 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         for (let j = 0; j < K; j++) { const J = info[j]; if (!J) continue; const dd = Math.hypot(J.h.p[0] - I.h.p[0], J.h.p[1] - I.h.p[1], J.h.p[2] - I.h.p[2]); if (dd < I.sig * 2 + Math.hypot(I.b[0] - I.a[0], I.b[1] - I.a[1])) D += J.dens; }
         I.knee = 1 / Math.sqrt(1 + (D / Dk) * (D / Dk)); } // local irradiance saturates softly at ≈ Dk
       for (let k = 0; k < K; k++) { const I = info[k]; if (I) { this._splat(V, I, 1, I.knee); this._splat(V, I, 14, I.knee * 0.12); } } // core + soft halo
+      if (!T.mode) { // dark: the backdrop is unlit, so add one very soft, wide pool of scattered light around the landing (implies the floor)
+        const on = info.filter(Boolean), M = on[on.length >> 1];
+        const S = M ? on.filter(I => dot3(I.h.n, M.h.n) > 0.99) : [];
+        if (S.length) {
+          const tr = (I) => { const v = [I.h.p[0] - M.h.p[0], I.h.p[1] - M.h.p[1], I.h.p[2] - M.h.p[2]]; return [dot3(v, M.nn), dot3(v, M.bn)]; };
+          const P = [0, 0, 0]; S.forEach(I => { P[0] += I.P[0] * I.knee; P[1] += I.P[1] * I.knee; P[2] += I.P[2] * I.knee; });
+          this._splat(V, { h: M.h, nn: M.nn, bn: M.bn, a: tr(S[0]), b: tr(S[S.length - 1]), sig: POOL[0] * M.sig, hs: POOL[1] * M.hs, sv: POOL[2] * M.hs, P }, 0, POOL[3]);
+        }
+      }
       return new Float32Array(V);
     }
     _splat(V, I, scale, k) {
-      const { h, nn, bn, a, b } = I, sig = I.sig * scale, hs = I.hs * (scale > 1 ? 2.5 : 1), sv = I.sv * (scale > 1 ? 4 : 1);
+      const { h, nn, bn, a, b } = I, sig = I.sig * (scale || 1), hs = I.hs * (scale > 1 ? 2.5 : 1), sv = I.sv * (scale > 1 ? 4 : 1); // scale 0: I as given
       // tangent basis of the surface, and transverse(beam) → surface mapping
       const N = h.n; let t1 = cross(N, [1, 0, 0]); if (Math.hypot(...t1) < 0.2) t1 = cross(N, [0, 1, 0]); t1 = norm3(t1); const t2 = cross(N, t1);
       const m00 = dot3(nn, t1), m01 = dot3(nn, t2), m10 = dot3(bn, t1), m11 = dot3(bn, t2), det = m00 * m11 - m01 * m10;
@@ -3000,7 +3010,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     // ── offline rendering
     _wait() { const gl = this.gl; const s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); return new Promise(r => { const p = () => { if (gl.clientWaitSync(s, 0, 0) === gl.TIMEOUT_EXPIRED) { setTimeout(p, 2); return; } gl.deleteSync(s); r(); }; p(); }); }
     async _offlineFrame(P, pose, cam, spp, time, transparent) {
-      this._uploadBeam(this._buildBeam(pose.ang, rotYX(pose.yaw, pose.pitch)));
+      this._uploadBeam(this._buildBeam(pose.ang, rotYX(pose.yaw, pose.pitch), !transparent));
       for (let i = 0; i < spp; i++) {
         if (this._cancel) throw Object.assign(new Error('Render cancelled'), { name: 'AbortError' });
         this._sample(P, pose, 1 / (i + 1), cam, i + 1, ((i + 0.5) / spp + 0.137) % 1);
