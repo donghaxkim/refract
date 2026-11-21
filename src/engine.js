@@ -104,6 +104,7 @@
   const SURF_GLSL = `const float WALL_Z = ${WALL_Z.toFixed(4)}, FLOOR_Y = ${FLOOR_Y.toFixed(4)}, COVE_R = ${COVE_R.toFixed(4)}, COVE_Y = ${COVE_Y.toFixed(4)}, COVE_Z = ${COVE_Z.toFixed(4)};`;
   // idle resting aim: light from the upper left (was π + 0.2, lower left), so the rainbow lands on the studio floor
   const REST_ANG = Math.PI - 0.2;
+  const ENTRY_K = 0.8; // pool where an incoming beam rises out of the floor, relative to a full landing
 
   // ───────────────────────────────────────── shaders
   const VERT = `#version 300 es
@@ -895,14 +896,21 @@
       const { o, dir, perp } = this._beamRays(ang);
       const waves = mirror ? 1 : bands.length;
       const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? 0.75 : 1); // lines: a slightly finer slit so neighbouring lines separate
-      const paths = [];
+      const paths = [], surf = !this._noSurf; // transparent output has no visible room: no clipping, no caustics
+      let entry = null; const tot = [0, 0, 0];
       for (let k = 0; k < waves; k++) {
         const bc = mirror ? { lam: src.lamC, rgb: src.color } : bands[k];
         const P = this.beam.trace(o, dir, bc.lam, mirror, R);
-        paths.push({ P, rgb: bc.rgb, hit: this._clipToSurfaces(P) }); // ribbons end where the light lands
+        const e = surf ? this._clipEntry(P) : null; if (e && !entry) entry = e; // light from below the floor rises out of it
+        paths.push({ P, rgb: bc.rgb, hit: surf ? this._clipToSurfaces(P) : null }); // ribbons end where the light lands
+        tot[0] += bc.rgb[0]; tot[1] += bc.rgb[1]; tot[2] += bc.rgb[2];
       }
       const base = I0 / 1.4 / (mirror ? 1 : BEAM_WAVES); // band colours carry the source's power; Σ luminance = BEAM_WAVES
-      this._causticArr = this._buildCaustic(paths, base, w0, lines || mirror);
+      this._causticArr = surf ? this._buildCaustic(paths, base, w0, lines || mirror) : new Float32Array(0);
+      if (entry) { // where the incoming (still white) beam leaves the floor: a soft pool, so it reads as light bounced off the surface
+        const E = this._buildCaustic([{ rgb: tot.map(v => v * ENTRY_K), hit: entry }], base, w0, true), C = new Float32Array(this._causticArr.length + E.length);
+        C.set(this._causticArr); C.set(E, this._causticArr.length); this._causticArr = C;
+      }
       const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
       const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
       for (let k = 0; k < waves; k++) {
@@ -917,6 +925,22 @@
         }
       }
       return new Float32Array(V);
+    }
+    /** An incoming beam that starts outside the room (below the floor): move its start (in place) to where it enters the room, so it is
+     *  never drawn inside a surface. Returns that point as a landing ({ p, n, d, q }) or null when the beam starts in the room. */
+    _clipEntry(P) {
+      if (!P.length || inRoom(P[0])) return null;
+      for (let i = 0; i + 1 < P.length; i++) {
+        const a = P[i], b = P[i + 1]; if (!inRoom(b)) continue; // the room is convex: the line enters it once
+        let lo = 0, hi = 1; for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2; if (inRoom(this._lerpPt(a, b, m))) hi = m; else lo = m; }
+        const q = this._lerpPt(a, b, hi); P.splice(0, i + 1, q);
+        let n = [0, 1, 0]; // floor, wall or cove: whichever the entry point lies on
+        if (q[2] < COVE_Z && q[1] < COVE_Y) { const dy = q[1] - COVE_Y, dz = q[2] - COVE_Z, l = Math.hypot(dy, dz) || 1; n = [0, -dy / l, -dz / l]; }
+        else if (q[2] - WALL_Z < q[1] - FLOOR_Y) n = [0, 0, 1];
+        const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.hypot(d[0], d[1], d[2]) || 1;
+        return { p: [q[0], q[1], q[2]], n, d: [d[0] / L, d[1] / L, d[2] / L], q };
+      }
+      return null;
     }
     /** Truncate a traced polyline (in place) at the first studio surface it reaches from inside the room. Returns the landing or null. */
     _clipToSurfaces(P) {
