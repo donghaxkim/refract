@@ -2851,7 +2851,9 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
         const sb = base * wt[s] / wsum; // this slice's share of the light
         if (surf) { // every slice lands, with its share of the light
           caustics.push(this._buildCaustic(paths, sb, w0, lines || mirror));
-          if (entry) caustics.push(this._buildCaustic([{ rgb: tot.map(v => v * ENTRY_K), hit: entry }], sb, w0, true)); // where the incoming (still white) beam leaves the floor: a soft pool
+          // where the incoming (still white) beam rises out of the floor: one soft pool for the whole beam (the centre slice carries
+          // all of it, so the slices don't print as parallel stripes)
+          if (entry && s === mid) caustics.push(this._buildCaustic([{ rgb: tot.map(v => v * ENTRY_K), hit: entry }], base, w0, true));
         }
         const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
         const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
