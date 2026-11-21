@@ -5,7 +5,7 @@
 import { createElement, forwardRef, useEffect, useRef, useImperativeHandle } from 'react';
 import './spectra-logo.js'; // registers <spectra-logo> (no-op during SSR)
 
-const STRING_PROPS = ['src', 'text', 'sample', 'font', 'material', 'light', 'theme', 'background', 'poster', 'alt'];
+const STRING_PROPS = ['src', 'text', 'sample', 'font', 'material', 'light', 'source', 'theme', 'background', 'poster', 'alt'];
 
 export const SpectraLogo = forwardRef(function SpectraLogo(props, ref) {
   const { className, style, id, interactive, transparent, thickness, roundness, onReady, onError, children, ...rest } = props;

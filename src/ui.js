@@ -119,11 +119,40 @@
     function pick(attr, val) { $$('button[data-' + attr + ']', popLight).forEach((b) => b.setAttribute('aria-checked', String(b.dataset[attr] === val))); }
     function setLight(v) { pick('light', v); call('setLightMode', v); }
     function setTheme(v) { pick('theme', v); root.classList.toggle('is-light', v === 'light'); call('setTheme', v); }
+    function setSource(v) { pick('source', v); call('setLightSource', v); }
     popLight.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.light) setLight(b.dataset.light);
       if (b.dataset.theme) setTheme(b.dataset.theme);
+      if (b.dataset.source) setSource(b.dataset.source);
     });
+    // arrow keys move (and select) within each radio group, like native radios
+    popLight.addEventListener('keydown', (e) => {
+      const k = e.key; if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(k)) return;
+      const b = e.target.closest('.sp-opt'); const g = b && b.parentElement; if (!g) return;
+      const all = $$('.sp-opt', g), i = all.indexOf(b), d = k === 'ArrowLeft' || k === 'ArrowUp' ? -1 : 1;
+      const nb = all[(i + d + all.length) % all.length]; e.preventDefault(); nb.focus(); nb.click();
+    });
+    // spectrum swatches, drawn from the engine's own source data: a gradient for continuous light, thin bars for emission lines
+    (function paintSources() {
+      const S = window.SpectraEngine && window.SpectraEngine.lightSources; if (!S) return;
+      const hex = (c) => '#' + c.map(v => { v = Math.max(0, Math.min(1, v)); v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; return Math.round(v * 255).toString(16).padStart(2, '0'); }).join('');
+      const pos = (l) => ((l - 400) / 300 * 100).toFixed(2) + '%';
+      S.forEach((s) => {
+        const el = $('button[data-source="' + s.id + '"] .sp-ico-src i', popLight); if (!el) return;
+        const mx = Math.max(...s.bands.map(b => Math.max(...b.rgb))) || 1;
+        if (s.kind === 'cont') {
+          el.style.backgroundImage = 'linear-gradient(90deg,' + s.bands.map(b => hex(b.rgb.map(v => v / mx)) + ' ' + pos(b.lam)).join(',') + ')';
+        } else {
+          const stops = []; s.bands.forEach((b) => {
+            const m = Math.max(...b.rgb); if (m < mx * 0.01) return;
+            const c = hex(b.rgb.map(v => v / m * Math.pow(m / mx, 0.35))), x = (b.lam - 400) / 300 * 100;
+            stops.push('transparent ' + (x - 0.9).toFixed(2) + '%', c + ' ' + (x - 0.9).toFixed(2) + '%', c + ' ' + (x + 0.9).toFixed(2) + '%', 'transparent ' + (x + 0.9).toFixed(2) + '%');
+          });
+          el.style.backgroundImage = 'linear-gradient(90deg,' + stops.join(',') + ')';
+        }
+      });
+    })();
     document.addEventListener('pointerdown', (e) => {
       if (!openPop) return;
       if (openPop.contains(e.target) || (openBtn && openBtn.contains(e.target))) return;

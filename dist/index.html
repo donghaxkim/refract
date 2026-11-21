@@ -237,7 +237,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 #spectra-canvas.is-dragging { cursor: grabbing; }
 
 /* ───── Light popover ───── */
-.sp-pop--light { width: 236px; padding: 10px; }
+.sp-pop--light { width: 252px; padding: 10px; }
 .sp-pop-label { margin: 2px 4px 7px; font: 500 10px var(--sp-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--sp-ink-3); }
 .sp-pop-label + .sp-opts { margin-bottom: 12px; }
 .sp-opts:last-child { margin-bottom: 0 !important; }
@@ -249,6 +249,12 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 .sp-ico-beam::before { content: ""; position: absolute; left: -4px; top: 13px; width: 48%; height: 2px; background: #fff; transform: rotate(-6deg); box-shadow: 0 0 6px rgba(255,255,255,.7); }
 .sp-ico-beam::after { content: ""; position: absolute; left: 46%; top: 6px; width: 60%; height: 18px; background: var(--sp-spectrum); clip-path: polygon(0 45%, 100% 0, 100% 100%, 0 58%); opacity: .9; }
 .sp-ico-studio { background: radial-gradient(60% 90% at 30% 0%, rgba(255,255,255,.55), transparent 70%), radial-gradient(40% 80% at 85% 100%, rgba(255,255,255,.22), transparent 70%), #08080a; }
+.sp-opts--3 { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.sp-opts--3 .sp-opt { gap: 7px; padding: 7px; min-width: 0; }
+.sp-opts--3 .sp-row-t { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sp-opts--3 .sp-opt-ico { height: 18px; border-radius: 5px; }
+.sp-ico-src i { position: absolute; left: 4px; right: 4px; top: 50%; height: 8px; margin-top: -4px; border-radius: 1px; background-repeat: no-repeat; }
+.sp-opt:focus-visible { outline: 2px solid var(--sp-line-2); outline-offset: 1px; }
 .sp-ico-dark { background: radial-gradient(70% 90% at 50% 50%, #1a1a1d, #030304); }
 .sp-ico-light { background: radial-gradient(70% 90% at 50% 40%, #f4f2ee, #d9d6d0); }
 
@@ -323,6 +329,15 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         <div class="sp-opts" role="radiogroup" aria-label="Light">
           <button type="button" class="sp-opt" role="radio" aria-checked="true" data-light="beam"><span class="sp-opt-ico sp-ico-beam" aria-hidden="true"></span><span class="sp-row-t">Beam</span></button>
           <button type="button" class="sp-opt" role="radio" aria-checked="false" data-light="studio"><span class="sp-opt-ico sp-ico-studio" aria-hidden="true"></span><span class="sp-row-t">Studio</span></button>
+        </div>
+        <p class="sp-pop-label">Source</p>
+        <div class="sp-opts sp-opts--3" role="radiogroup" aria-label="Light source">
+          <button type="button" class="sp-opt" role="radio" aria-checked="true" data-source="white" title="Equal-energy white light"><span class="sp-opt-ico sp-ico-src" aria-hidden="true"><i></i></span><span class="sp-row-t">White</span></button>
+          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-source="sun" title="Daylight (CIE D65)"><span class="sp-opt-ico sp-ico-src" aria-hidden="true"><i></i></span><span class="sp-row-t">Sun</span></button>
+          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-source="tungsten" title="Incandescent bulb, 2700 K"><span class="sp-opt-ico sp-ico-src" aria-hidden="true"><i></i></span><span class="sp-row-t">Tungsten</span></button>
+          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-source="neon" title="Neon emission lines"><span class="sp-opt-ico sp-ico-src" aria-hidden="true"><i></i></span><span class="sp-row-t">Neon</span></button>
+          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-source="sodium" title="Sodium D lines, 589 nm"><span class="sp-opt-ico sp-ico-src" aria-hidden="true"><i></i></span><span class="sp-row-t">Sodium</span></button>
+          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-source="mercury" title="Mercury emission lines"><span class="sp-opt-ico sp-ico-src" aria-hidden="true"><i></i></span><span class="sp-row-t">Mercury</span></button>
         </div>
         <p class="sp-pop-label">Background</p>
         <div class="sp-opts" role="radiogroup" aria-label="Background">
@@ -1581,11 +1596,64 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   }
   let SPEC_NORM_SHADER;
   SPEC_NORM_SHADER = specNorm(400, 700, 4000);
+  const BEAM_NORM = specNorm(400, 700, BEAM_WAVES);
   const BEAM_COLORS = (() => {
-    const n = specNorm(400, 700, BEAM_WAVES); const out = [];
+    const n = BEAM_NORM; const out = [];
     for (let i = 0; i < BEAM_WAVES; i++) { const l = 400 + 300 * (i + 0.5) / BEAM_WAVES; const c = zucconi(l); out.push({ lam: l, rgb: [c[0] * n[0], c[1] * n[1], c[2] * n[2]] }); }
     return out;
   })();
+
+  // ───────────────────────────────────────── light sources (real spectra)
+  // Continuous sources weight the 56 beam bands by their spectral power; line sources trace one ribbon per emission line.
+  // Line data: NIST Handbook of Basic Atomic Spectroscopic Data (air wavelengths, nm; relative intensities as listed there,
+  // except Ne 540.1 nm: NIST lists 200, lowered to 60 to match how weak it looks in real neon discharge lamps).
+  const D65 = [82.7549, 91.486, 93.4318, 86.6823, 104.865, 117.008, 117.812, 114.861, 115.923, 108.811, 109.354, 107.802, 104.79, 107.689, 104.405, 104.046, 100.0, 96.3342, 95.788, 88.6856, 90.0062, 89.5991, 87.6987, 83.2886, 83.6992, 80.0268, 80.2146, 82.2778, 78.2842, 69.7213, 71.6091]; // CIE D65, 400–700 nm / 10 nm
+  const planck = (lam, T) => { const l = lam * 1e-9; return 1 / (Math.pow(l, 5) * (Math.exp(1.4388e-2 / (l * T)) - 1)); };
+  const SOURCE_DEFS = {
+    white: { label: 'White', kind: 'cont', spd: null }, // equal energy (the original look)
+    sun: { label: 'Sun', kind: 'cont', spd: (l) => { const f = clamp((l - 400) / 10, 0, 29.9999), i = Math.floor(f); return lerp(D65[i], D65[i + 1], f - i); } },
+    tungsten: { label: 'Tungsten', kind: 'cont', spd: (l) => planck(l, 2700) },
+    neon: { label: 'Neon', kind: 'lines', lines: [[540.056, 60], [585.249, 200], [588.190, 100], [594.483, 50], [597.553, 60], [603.000, 100], [607.434, 100], [609.616, 30], [614.306, 100], [616.359, 100], [621.728, 100], [626.650, 100], [633.443, 100], [638.299, 100], [640.225, 200], [650.653, 150], [659.895, 100], [667.828, 50], [692.947, 1000], [703.241, 300]] },
+    sodium: { label: 'Sodium', kind: 'lines', lines: [[498.281, 5], [568.820, 8], [588.995, 1000], [589.592, 500], [616.075, 3]] },
+    mercury: { label: 'Mercury', kind: 'lines', lines: [[404.656, 400], [435.833, 1000], [546.074, 500], [576.960, 50], [579.066, 60]] },
+  };
+  const LUM = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const cieY = (l) => 0.821 * g1(l, 568.8, 46.9, 40.5) + 0.286 * g1(l, 530.9, 16.3, 31.1);
+  /** One emission line's colour: zucconi hue (matches the rainbow), more saturated (a line is monochromatic), zucconi luminance;
+   *  past the palette's red/violet ends the brightness follows the eye's sensitivity so deep-red neon lines don't vanish. */
+  function lineRGB(l) {
+    const lc = clamp(l, 406, 678), z = zucconi(lc), n = BEAM_NORM, c = [z[0] * n[0], z[1] * n[1], z[2] * n[2]];
+    const y0 = LUM(c), m = Math.min(c[0], c[1], c[2]) * 0.85; let s = c.map(v => v - m); const y1 = LUM(s) || 1;
+    s = s.map(v => v * y0 / y1);
+    const k = l === lc ? 1 : cieY(l) / cieY(lc);
+    return s.map(v => v * k);
+  }
+  function buildSource(id) {
+    const D = SOURCE_DEFS[id]; let bands;
+    if (!D.spd && D.kind === 'cont') bands = BEAM_COLORS;
+    else if (D.kind === 'cont') { const w = BEAM_COLORS.map(b => D.spd(b.lam)); const mx = Math.max(...w); bands = BEAM_COLORS.map((b, i) => ({ lam: b.lam, rgb: b.rgb.map(v => v * w[i] / mx) })); }
+    else bands = D.lines.slice().sort((a, b) => a[0] - b[0]).map(([lam, w]) => ({ lam, rgb: lineRGB(lam).map(v => v * w) }));
+    // normalise: the whole source is as bright as white (Σ luminance = BEAM_WAVES), keeping its colour cast
+    const tot = [0, 0, 0]; bands.forEach(b => { tot[0] += b.rgb[0]; tot[1] += b.rgb[1]; tot[2] += b.rgb[2]; });
+    // …but a saturated source (neon) is capped by its strongest channel, or it would bloom into a haze
+    let K = D.spd || D.kind === 'lines' ? BEAM_WAVES / LUM(tot) : 1;
+    if (K !== 1) K *= Math.min(1, 1.1 * BEAM_WAVES / (K * Math.max(tot[0], tot[1], tot[2])));
+    if (K !== 1) bands = bands.map(b => ({ lam: b.lam, rgb: b.rgb.map(v => v * K) }));
+    const color = D.spd || D.kind === 'lines' ? tot.map(v => v * K / BEAM_WAVES) : [1, 1, 1]; // integrated colour, luminance 1
+    const lums = bands.map(b => LUM(b.rgb)), lsum = lums.reduce((a, b) => a + b, 0);
+    let lamC = 0; bands.forEach((b, i) => { lamC += b.lam * lums[i] / lsum; });
+    const lams = bands.filter((b, i) => lums[i] > lsum * 0.004).map(b => b.lam);
+    let lo = Math.min(...lams), hi = Math.max(...lams);
+    lo = Math.min(lo, 420); hi = Math.max(hi, 680); // _bestOffset probe: white's span (same route as white) ∪ the source's own lines (all coherent)
+    // shader: 0 = white (original path), 1 = continuous (SPD table), 2 = lines (inverse-CDF sampled by luminance)
+    const mode = !D.spd && D.kind === 'cont' ? 0 : (D.kind === 'cont' ? 1 : 2);
+    const spd = new Float32Array(31).fill(1), lines = new Float32Array(48);
+    if (mode === 1) { const v = []; for (let i = 0; i <= 30; i++) v.push(D.spd(400 + i * 10)); const mx = Math.max(...v); v.forEach((x, i) => { spd[i] = x / mx; }); }
+    let lineN = 0;
+    if (mode === 2) { let acc = 0; bands.forEach((b, i) => { if (lineN >= 24) return; acc += lums[i] / lsum; lines[lineN * 2] = b.lam; lines[lineN * 2 + 1] = Math.min(acc, 1); lineN++; }); lines[lineN * 2 - 1] = 1.0001; }
+    return { id, label: D.label, kind: D.kind, bands, color, lamC: mode ? lamC : 550, lo, hi, mode, spd, lines, lineN };
+  }
+  const SOURCES = {}; for (const id in SOURCE_DEFS) SOURCES[id] = buildSource(id);
 
   // ───────────────────────────────────────── shaders
   const VERT = `#version 300 es
@@ -1654,8 +1722,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     gl_PointSize = uPx*(0.9 + 1.8*h(s+1.0))*(4.2/max(c.w,0.5));
   }`;
   const DUST_FRAG = `#version 300 es
-  precision highp float; in float vB; out vec4 o;
-  void main(){ vec2 q = gl_PointCoord*2.0-1.0; float d = dot(q,q); float a = exp(-d*3.0)*(1.0-step(1.0,d)); o = vec4(vec3(1.0)*vB*a, 0.0); }`;
+  precision highp float; in float vB; out vec4 o; uniform vec3 uTint; // light source colour (white = 1,1,1)
+  void main(){ vec2 q = gl_PointCoord*2.0-1.0; float d = dot(q,q); float a = exp(-d*3.0)*(1.0-step(1.0,d)); o = vec4(uTint*vB*a, 0.0); }`;
 
   const COMMON = `
   float g1(float x, float mu, float s1, float s2){ float t = (x-mu)/(x<mu?s1:s2); return exp(-0.5*t*t); }
@@ -1676,12 +1744,15 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   uniform vec3 uChromeTint; uniform float uSpectral;
   uniform int uLightCount; uniform vec3 uLD[6]; uniform vec3 uLT[6]; uniform vec3 uLB[6]; uniform vec2 uLS[6]; uniform vec3 uLC[6]; uniform int uLK[6];
   uniform float uAmbient, uHorizon; uniform vec3 uUp; uniform vec3 uSpecNorm; uniform float uSky, uGround, uSceneFloor; uniform int uDebug;
+  uniform int uSrcMode, uLineN; uniform float uSpd[31]; uniform vec2 uLines[24]; // light source: 0 white, 1 continuous SPD, 2 emission lines
   ${COMMON}
   vec3 bump3(vec3 x, vec3 y){ vec3 r = 1.0 - x*x; return clamp(r - y, 0.0, 1.0); }
   vec3 zucconi(float w){ float x = clamp((w-400.0)/300.0, 0.0, 1.0);
     return bump3(vec3(3.54585104,2.93225262,2.41593945)*(x-vec3(0.69549072,0.49228336,0.27699880)), vec3(0.02312639,0.15225084,0.52607955))
          + bump3(vec3(3.90307140,3.21182957,3.96587128)*(x-vec3(0.11748627,0.86755042,0.66077860)), vec3(0.84897130,0.88445281,0.73949448)); }
   vec3 specW(float l){ return zucconi(l)*uSpecNorm; }
+  float spdAt(float l){ float f = clamp((l-400.0)/10.0, 0.0, 29.999); int i = int(f); return mix(uSpd[i], uSpd[i+1], f-float(i)); }
+  float lineAt(float u){ float l = uLines[0].x; for (int i=0;i<24;i++){ if (i>=uLineN) break; l = uLines[i].x; if (u <= uLines[i].y) break; } return l; }
   vec2 toUv(vec2 p){ return vec2(p.x*0.5+0.5, 0.5-p.y*0.5); }
   float outside(vec2 p){ return length(max(abs(p)-1.0, 0.0)); }
   vec2 fieldB(vec2 p){ return texture(uField, clamp(toUv(p),0.0,1.0)).rg + outside(p); }
@@ -1753,11 +1824,13 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     float F = fresnel(ci, 1.0, uIor);
     vec3 R = env(reflect(rd,n));
     vec3 col = R*F + panelHighlight(R, ci);
-    vec3 acc = vec3(0.0), wsum = vec3(0.0);
+    vec3 acc = vec3(0.0), wsum = vec3(0.0); vec3 accY = vec3(0.0); float wY = 0.0;
     const int K = 6;
     for (int k=0;k<K;k++){
       float lam = 400.0 + 300.0*fract((float(k)+0.5)/float(K) + uLamOffset);
-      vec3 w = specW(lam); float nl = iorAt(lam);
+      if (uSrcMode == 2) lam = lineAt(fract((float(k)+0.5)/float(K) + uLamOffset)); // importance-sampled emission lines
+      vec3 w = specW(lam); if (uSrcMode == 1) w *= spdAt(lam);
+      float nl = iorAt(lam);
       vec3 dir = refract(rd, n, 1.0/nl);
       vec3 pos = p - n*0.0012; float thr = 1.0-F; vec3 L = vec3(0.0); vec3 trans = vec3(1.0);
       for (int b=0;b<2;b++){
@@ -1774,7 +1847,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         if (thr < 0.02) break;
       }
       acc += L*w; wsum += w;
+      if (uSrcMode == 2){ float y = dot(w, vec3(0.2126,0.7152,0.0722)); accY += L*y; wY += y; }
     }
+    if (uSrcMode == 2){ // a channel the lines barely reach falls back to the grey-weighted average: no colour cast on the backdrop
+      float e = 0.15*max(wsum.r, max(wsum.g, wsum.b)); return col + (acc + accY/max(wY,1e-4)*e)/max(wsum + e, vec3(1e-4)); }
     return col + acc/max(wsum, vec3(0.1));
   }
   vec3 shadeChrome(vec3 p, vec3 n, vec3 rd){
@@ -2102,7 +2178,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       this.field = null; this.fi = { size: 1, extent: [0.5, 0.5], maxInset: 0.05, blurInset: 0.05 };
       this.beam = new Beam3D();
 
-      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'dark'; this.lightMode = 'beam'; this.envYaw = 0; this.envYawT = 0;
+      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'dark'; this.lightMode = 'beam'; this.source = 'white'; this._src = SOURCES.white; this.envYaw = 0; this.envYawT = 0;
       this.listeners = {};
       this.time = 0; this.frame = 0; this.samples = 0; this.paused = false;
       this.pointer = null; this.lastPointerT = -1e9;
@@ -2147,6 +2223,9 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     getTheme() { return this.theme; }
     setLightMode(m) { if (m !== 'beam' && m !== 'studio') return; if (m === this.lightMode) return; this.lightMode = m; this._applyLook(); this._dirty = true; }
     getLightMode() { return this.lightMode; }
+    /** Light source spectrum: 'white' (equal energy, default), 'sun' (D65), 'tungsten' (2700 K), 'neon', 'sodium', 'mercury'. */
+    setLightSource(id) { if (!SOURCES[id] || id === this.source) return; this.source = id; this._src = SOURCES[id]; this._applyLook(); this._bestAng = null; this._dirty = true; }
+    getLightSource() { return this.source; }
     setMaterial(m) { if (m !== 'glass' && m !== 'chrome') return; if (m === this.material) return; this.material = m; this._applyLook(); this._dirty = true; }
     getMaterial() { return this.material; }
     setPointer(x, y) {
@@ -2251,6 +2330,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       gl.uniform1f(u.uAmbient, chromeM ? (T.mode ? 0.05 : 0.0) : (T.ambient != null ? T.ambient : (studio ? L.ambient * 3 : L.ambient))); gl.uniform1f(u.uHorizon, chromeM ? 0 : (T.mode ? 0.5 : L.horizon)); gl.uniform3fv(u.uSpecNorm, SPEC_NORM_SHADER);
       gl.uniform1f(u.uEnvThrough, T.mode ? (studio ? 0.25 : 0.08) : (studio ? 0.75 : (L.envThrough || 0)));
       gl.uniform1f(u.uCauchyB, CAUCHY_B * (studio ? 0.5 : 0.22));
+      const src = this._src; gl.uniform1i(u.uSrcMode, src.mode); gl.uniform1i(u.uLineN, src.lineN); gl.uniform1fv(u.uSpd, src.spd); gl.uniform2fv(u.uLines, src.lines);
+      const tint = studio && src.mode ? src.color : [1, 1, 1]; // studio: the key lights take the source's colour
       const S = this.shape, th = S.thickness, ro = S.roundness;
       const depth = clamp(L.shape.depth * Math.pow(2, (th - 0.5) * 2.4), 0.012, Math.max(fi.maxInset * (1.6 + 3.4 * th), 0.05));
       const bevelMax = Math.min(depth * 0.98, Math.max(fi.maxInset * 0.72, 0.004)); // keep the surface off the stroke's centre ridge
@@ -2266,7 +2347,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         const az = l.az * DEG, el = l.el * DEG; const d = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
         let t = cross([0, 1, 0], d); if (Math.hypot(...t) < 1e-3) t = [1, 0, 0]; t = norm3(t); const b = norm3(cross(d, t));
         const r = (l.rot || 0) * DEG, cr = Math.cos(r), sr = Math.sin(r);
-        return { d, t: [t[0] * cr + b[0] * sr, t[1] * cr + b[1] * sr, t[2] * cr + b[2] * sr], b: [-t[0] * sr + b[0] * cr, -t[1] * sr + b[1] * cr, -t[2] * sr + b[2] * cr], hs: [l.w * 0.5 * DEG, l.h * 0.5 * DEG], c: l.col.map(v => v * l.i * (this.lightMode === 'studio' ? 1.5 : 1) * (this.material === 'chrome' ? 1 : THEMES[this.theme].lightK)), k: l.kind };
+        return { d, t: [t[0] * cr + b[0] * sr, t[1] * cr + b[1] * sr, t[2] * cr + b[2] * sr], b: [-t[0] * sr + b[0] * cr, -t[1] * sr + b[1] * cr, -t[2] * sr + b[2] * cr], hs: [l.w * 0.5 * DEG, l.h * 0.5 * DEG], c: l.col.map((v, ci) => v * tint[ci] * l.i * (this.lightMode === 'studio' ? 1.5 : 1) * (this.material === 'chrome' ? 1 : THEMES[this.theme].lightK)), k: l.kind };
       });
       if (this._bgSrgb !== undefined || this.transparent) this._syncBg();
     }
@@ -2286,15 +2367,15 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     /** Pick the line through the logo whose exit spectrum is widest (hollow / symmetric logos cancel dispersion). */
     _bestOffset(ang, R) {
       if (!this.beam.ok || this.material === 'chrome') return 0.06;
-      let best = 0.06, bestScore = -1;
+      let best = 0.06, bestScore = -1; const lo = this._src.lo, hi = this._src.hi; // probe the source's own wavelength span
       const ext = Math.max(this.fi.extent[0], this.fi.extent[1]);
       const last = (P) => { const a = P[P.length - 1], b = P[P.length - 2]; return norm3([a[0] - b[0], a[1] - b[1], a[2] - b[2]]); };
       const cur = this._bestOff; let curScore = -1;
       for (let o = -ext * 0.85; o <= ext * 0.85 + 1e-6; o += ext * 0.05) {
         const { o: org, dir } = this._beamRays(ang, o);
-        const a = this.beam.trace(org, dir, 420, false, R); if (a.length < 4) continue;
-        const b = this.beam.trace(org, dir, 680, false, R); if (b.length !== a.length) continue;
-        const m = this.beam.trace(org, dir, 550, false, R); if (m.length !== a.length) continue; // one coherent route for all colours
+        const a = this.beam.trace(org, dir, lo, false, R); if (a.length < 4) continue;
+        const b = this.beam.trace(org, dir, hi, false, R); if (b.length !== a.length) continue;
+        const m = this.beam.trace(org, dir, (lo + hi) / 2, false, R); if (m.length !== a.length) continue; // one coherent route for all colours
         const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1));
         const e = Math.min(a[a.length - 1][5], b[b.length - 1][5]);
         const score = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
@@ -2306,25 +2387,26 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     }
     _buildBeam(ang, R) {
       const mirror = this.material === 'chrome';
+      const src = this._src, lines = src.kind === 'lines', bands = src.bands;
       const { o, dir, perp } = this._beamRays(ang);
-      const waves = mirror ? 1 : BEAM_WAVES;
-      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5;
+      const waves = mirror ? 1 : bands.length;
+      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? 0.75 : 1); // lines: a slightly finer slit so neighbouring lines separate
       const paths = [];
       for (let k = 0; k < waves; k++) {
-        const bc = mirror ? { lam: 550, rgb: [1, 1, 1] } : BEAM_COLORS[k];
+        const bc = mirror ? { lam: src.lamC, rgb: src.color } : bands[k];
         paths.push({ P: this.beam.trace(o, dir, bc.lam, mirror, R), rgb: bc.rgb });
       }
-      const base = I0 / 1.4 / waves;
+      const base = I0 / 1.4 / (mirror ? 1 : BEAM_WAVES); // band colours carry the source's power; Σ luminance = BEAM_WAVES
       const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
       const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
       for (let k = 0; k < waves; k++) {
         const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
-        const same = !!B && A.length === B.length;
+        const same = !lines && !!B && A.length === B.length; // emission lines: separate ribbons, no sheet between them
         const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
         const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : 0;
         for (let i = 0; i + 1 < A.length; i++) {
           const n = nRef(i, A);
-          this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
+          this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror || lines ? 0 : 1, n);
           if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base, w0, n);
         }
       }
@@ -2430,7 +2512,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         const tanF = Math.tan(15 * DEG) * cam.k;
         const VPw = viewProj(null, 4.6, tanF, w / h, cam.cx, cam.cy);
         if (flip) { for (let i = 1; i < 16; i += 4) VPw[i] = -VPw[i]; }
-        gl.uniformMatrix4fv(d.u.uVPw, false, VPw); gl.uniform1f(d.u.uFlipY, flip ? 1 : 0); gl.uniform1f(d.u.uTime, time); gl.uniform1f(d.u.uPx, Math.max(1, h / 900) * 1.6);
+        gl.uniformMatrix4fv(d.u.uVPw, false, VPw); gl.uniform1f(d.u.uFlipY, flip ? 1 : 0); gl.uniform1f(d.u.uTime, time); gl.uniform1f(d.u.uPx, Math.max(1, h / 900) * 1.6); gl.uniform3fv(d.u.uTint, this._src.color);
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, P.bloom[Math.min(2, P.bloom.length - 1)].tex); gl.uniform1i(d.u.uGlow, 0);
         gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, w, h);
         gl.bindVertexArray(this.dustVao); gl.drawArrays(gl.POINTS, 0, this.dustN); gl.disable(gl.BLEND);
@@ -2559,6 +2641,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   }
   SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
   SpectraEngine.version = 2;
+  /** Light sources for UI swatches: [{ id, label, kind: 'cont'|'lines', bands: [{ lam, rgb }] }] (rgb linear, unnormalised). */
+  SpectraEngine.lightSources = Object.keys(SOURCES).map(id => ({ id, label: SOURCES[id].label, kind: SOURCES[id].kind, color: SOURCES[id].color.slice(), bands: SOURCES[id].bands.map(b => ({ lam: b.lam, rgb: b.rgb.slice() })) }));
   SpectraEngine._toneMap = toneMapJS; SpectraEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
   window.SpectraEngine = SpectraEngine;
 })();
@@ -3300,11 +3384,40 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     function pick(attr, val) { $$('button[data-' + attr + ']', popLight).forEach((b) => b.setAttribute('aria-checked', String(b.dataset[attr] === val))); }
     function setLight(v) { pick('light', v); call('setLightMode', v); }
     function setTheme(v) { pick('theme', v); root.classList.toggle('is-light', v === 'light'); call('setTheme', v); }
+    function setSource(v) { pick('source', v); call('setLightSource', v); }
     popLight.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.light) setLight(b.dataset.light);
       if (b.dataset.theme) setTheme(b.dataset.theme);
+      if (b.dataset.source) setSource(b.dataset.source);
     });
+    // arrow keys move (and select) within each radio group, like native radios
+    popLight.addEventListener('keydown', (e) => {
+      const k = e.key; if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(k)) return;
+      const b = e.target.closest('.sp-opt'); const g = b && b.parentElement; if (!g) return;
+      const all = $$('.sp-opt', g), i = all.indexOf(b), d = k === 'ArrowLeft' || k === 'ArrowUp' ? -1 : 1;
+      const nb = all[(i + d + all.length) % all.length]; e.preventDefault(); nb.focus(); nb.click();
+    });
+    // spectrum swatches, drawn from the engine's own source data: a gradient for continuous light, thin bars for emission lines
+    (function paintSources() {
+      const S = window.SpectraEngine && window.SpectraEngine.lightSources; if (!S) return;
+      const hex = (c) => '#' + c.map(v => { v = Math.max(0, Math.min(1, v)); v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; return Math.round(v * 255).toString(16).padStart(2, '0'); }).join('');
+      const pos = (l) => ((l - 400) / 300 * 100).toFixed(2) + '%';
+      S.forEach((s) => {
+        const el = $('button[data-source="' + s.id + '"] .sp-ico-src i', popLight); if (!el) return;
+        const mx = Math.max(...s.bands.map(b => Math.max(...b.rgb))) || 1;
+        if (s.kind === 'cont') {
+          el.style.backgroundImage = 'linear-gradient(90deg,' + s.bands.map(b => hex(b.rgb.map(v => v / mx)) + ' ' + pos(b.lam)).join(',') + ')';
+        } else {
+          const stops = []; s.bands.forEach((b) => {
+            const m = Math.max(...b.rgb); if (m < mx * 0.01) return;
+            const c = hex(b.rgb.map(v => v / m * Math.pow(m / mx, 0.35))), x = (b.lam - 400) / 300 * 100;
+            stops.push('transparent ' + (x - 0.9).toFixed(2) + '%', c + ' ' + (x - 0.9).toFixed(2) + '%', c + ' ' + (x + 0.9).toFixed(2) + '%', 'transparent ' + (x + 0.9).toFixed(2) + '%');
+          });
+          el.style.backgroundImage = 'linear-gradient(90deg,' + stops.join(',') + ')';
+        }
+      });
+    })();
     document.addEventListener('pointerdown', (e) => {
       if (!openPop) return;
       if (openPop.contains(e.target) || (openBtn && openBtn.contains(e.target))) return;
