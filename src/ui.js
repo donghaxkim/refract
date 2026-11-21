@@ -424,6 +424,7 @@
 
     /* ───── layout / insets ───── */
     function insets() {
+      if (!pill.offsetParent) return; // pill hidden (camera mode frames the view itself)
       const r = pill.getBoundingClientRect();
       const bottom = Math.max(0, Math.round(window.innerHeight - r.top + 8));
       call('setViewInsets', { right: 0, bottom });
@@ -449,7 +450,10 @@
     }
     if (!engine) toast('Renderer unavailable in this browser', 'err', 6000);
 
-    return { toast, setMaterial, loadFile, loadSample, close, hide: setHidden };
+    const api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
+    // camera mode (src/camera.js): Photo / Video / Loop with viewfinder, trimmer and offline capture
+    if (global.SpectraCamera) { try { api.camera = global.SpectraCamera.init(engine, api); } catch (e) { console.error('[Spectra UI] camera', e); } }
+    return api;
   }
 
   global.SpectraUI = { init };

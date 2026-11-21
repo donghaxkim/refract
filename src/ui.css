@@ -271,3 +271,129 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 .sp-sl input[type="range"]:focus-visible { outline: none; }
 .sp-sl input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--sp-ink-3); }
 .sp-root.is-light .sp-sl input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.25); }
+
+/* ───── Camera mode (src/camera.js) · UX adapted from 3dsvg by Renato Costa, MIT ───── */
+.sp-btn--icon { flex: none !important; width: 40px; padding: 0 !important; display: grid; place-items: center; }
+.sp-btn--icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linejoin: round; }
+.sp-ui.is-cam .sp-pill, .sp-ui.is-cam .sp-pop, .sp-ui.is-cam .sp-hint { display: none !important; }
+.sp-ui.is-cam .sp-dock { transition: bottom 220ms var(--sp-ease); }
+.sp-cam { position: absolute; inset: 0; pointer-events: none; }
+.sp-cam > * { pointer-events: auto; }
+.sp-cam-checker { position: absolute; pointer-events: none; background: repeating-conic-gradient(#2a2a2e 0 25%, #1c1c1f 0 50%) 0 0 / 16px 16px; }
+.sp-root.is-light .sp-cam-checker { background: repeating-conic-gradient(#e9e6e1 0 25%, #f7f6f3 0 50%) 0 0 / 16px 16px; }
+
+/* viewfinder: the canvas draws only inside this frame (engine.setFrameAspect), the rest is scrim */
+.sp-vf { position: absolute; pointer-events: none !important; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 0 100vmax rgba(0, 0, 0, 0.32); transition: box-shadow 200ms var(--sp-ease); }
+.sp-root.is-light .sp-vf { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.14), 0 0 0 100vmax rgba(0, 0, 0, 0.07); }
+.sp-vf-c { position: absolute; width: 14px; height: 14px; border: 0 solid rgba(255, 255, 255, 0.9); transition: border-color 200ms var(--sp-ease); }
+.sp-root.is-light .sp-vf-c { border-color: rgba(23, 23, 26, 0.75); }
+.sp-vf-c--tl { left: -1px; top: -1px; border-left-width: 1.5px; border-top-width: 1.5px; }
+.sp-vf-c--tr { right: -1px; top: -1px; border-right-width: 1.5px; border-top-width: 1.5px; }
+.sp-vf-c--bl { left: -1px; bottom: -1px; border-left-width: 1.5px; border-bottom-width: 1.5px; }
+.sp-vf-c--br { right: -1px; bottom: -1px; border-right-width: 1.5px; border-bottom-width: 1.5px; }
+.sp-vf.is-rec { box-shadow: 0 0 0 1px rgba(255, 69, 58, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.32); }
+.sp-vf.is-rec .sp-vf-c { border-color: #ff453a; }
+.sp-vf-size { position: absolute; right: 0; top: -20px; font: 400 10px var(--sp-mono); letter-spacing: 0.06em; color: var(--sp-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-vf-media { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: fill; }
+.sp-vf-media.is-clear { background: repeating-conic-gradient(#2a2a2e 0 25%, #1c1c1f 0 50%) 0 0 / 16px 16px; }
+.sp-root.is-light .sp-vf-media.is-clear { background: repeating-conic-gradient(#e9e6e1 0 25%, #f7f6f3 0 50%) 0 0 / 16px 16px; }
+.sp-vf-flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+.sp-vf-flash.is-on { animation: sp-flash 420ms var(--sp-ease) both; }
+@keyframes sp-flash { from { opacity: 0.85; } to { opacity: 0; } }
+
+/* bottom stack: same anchor as the pill */
+.sp-cam-bar, .sp-cam-pill, .sp-sheet { position: absolute; left: 50%; bottom: var(--sp-safe-b); transform: translateX(-50%); }
+.sp-cam-bar { display: flex; flex-direction: column; align-items: center; gap: 10px; animation: sp-cam-in 260ms var(--sp-ease) both; }
+@keyframes sp-cam-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.sp-cam-opts { display: flex; align-items: center; height: 36px; padding: 3px; gap: 1px; border-radius: 999px; background: var(--sp-glass); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line), 0 12px 40px -12px rgba(0, 0, 0, 0.8); }
+.sp-cam-opts .sp-div { margin: 0 3px; height: 16px; }
+.sp-cam-aspect { display: flex; height: 100%; gap: 1px; }
+.sp-cam-aspect button, .sp-cam-res, .sp-cam-fps button { height: 100%; padding: 0 10px; border-radius: 999px; font: 500 11px var(--sp-mono); letter-spacing: 0.02em; color: var(--sp-ink-3); transition: color 160ms var(--sp-ease), background-color 160ms var(--sp-ease); white-space: nowrap; }
+.sp-cam-aspect button:hover, .sp-cam-res:hover, .sp-cam-fps button:hover { color: var(--sp-ink); }
+.sp-cam-aspect button[aria-checked="true"], .sp-cam-fps button[aria-checked="true"] { color: var(--sp-ink); background: var(--sp-fill-2); }
+.sp-cam-res { color: var(--sp-ink-2); min-width: 52px; }
+.sp-cam-modes { display: flex; gap: 2px; }
+.sp-cam-modes button { position: relative; padding: 6px 11px; font-size: 12px; font-weight: 550; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sp-ink-3); transition: color 160ms var(--sp-ease); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
+.sp-root.is-light .sp-cam-modes button { text-shadow: none; }
+.sp-cam-modes button:hover { color: var(--sp-ink-2); }
+.sp-cam-modes button[aria-checked="true"] { color: var(--sp-ink); }
+.sp-cam-modes button[aria-checked="true"]::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 1px; height: 1px; background: var(--sp-spectrum); }
+.sp-cam-row { display: grid; grid-template-columns: 44px 72px 44px; align-items: center; gap: 28px; }
+.sp-cam-round { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--sp-ink-2); background: var(--sp-glass); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line); transition: color 160ms var(--sp-ease), background-color 160ms var(--sp-ease); }
+.sp-cam-round:hover { color: var(--sp-ink); }
+.sp-cam-round svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.sp-cam-round svg .f { fill: currentColor; stroke: none; opacity: 0; transition: opacity 160ms var(--sp-ease); }
+.sp-cam-round[aria-pressed="true"] { color: var(--sp-ink); background: var(--sp-fill-2); box-shadow: inset 0 0 0 1px var(--sp-line-2); }
+.sp-cam-round[aria-pressed="true"] svg .f { opacity: 0.85; }
+.sp-cam-round.is-off { visibility: hidden; }
+
+/* shutter (ported from 3dsvg's ShutterButton: ring + inner fill; white = photo, red = record) */
+.sp-shutter { position: relative; width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 3px #fff, 0 10px 30px -10px rgba(0, 0, 0, 0.7); transition: box-shadow 260ms var(--sp-ease); }
+.sp-shutter-core { width: 58px; height: 58px; border-radius: 50%; background: #fff; transition: transform 160ms var(--sp-ease), background-color 260ms var(--sp-ease), border-radius 260ms var(--sp-ease); }
+.sp-shutter:active .sp-shutter-core { transform: scale(0.9); }
+.sp-shutter[data-mode="video"] { box-shadow: inset 0 0 0 3px #ff453a, 0 10px 30px -10px rgba(0, 0, 0, 0.7); }
+.sp-shutter[data-mode="video"] .sp-shutter-core { background: #ff453a; }
+.sp-shutter[data-mode="loop"] .sp-shutter-core { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2317171a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 2.5l2.5 2.5L17 7.5'/%3E%3Cpath d='M4.5 11V9.5a4.5 4.5 0 0 1 4.5-4.5h10.5'/%3E%3Cpath d='M7 21.5L4.5 19 7 16.5'/%3E%3Cpath d='M19.5 13v1.5a4.5 4.5 0 0 1-4.5 4.5H4.5'/%3E%3C/svg%3E") center / 24px no-repeat; }
+.sp-shutter.is-busy .sp-shutter-core { transform: scale(0.72); animation: sp-pulse 700ms ease-in-out infinite alternate; }
+.sp-shutter:focus-visible { outline-offset: 3px; }
+.sp-root.is-light .sp-shutter { box-shadow: inset 0 0 0 3px #17171a, 0 10px 30px -14px rgba(0, 0, 0, 0.35); }
+.sp-root.is-light .sp-shutter[data-mode="photo"] .sp-shutter-core, .sp-root.is-light .sp-shutter[data-mode="loop"] .sp-shutter-core { background-color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.sp-root.is-light .sp-shutter[data-mode="video"] { box-shadow: inset 0 0 0 3px #ff453a, 0 10px 30px -14px rgba(0, 0, 0, 0.35); }
+.sp-cam-note { margin: 0; max-width: 340px; text-align: center; font-size: 11px; letter-spacing: 0.02em; color: var(--sp-ink-3); text-wrap: balance; }
+
+/* recording pill + busy pill (3dsvg's recording pill: dot, timer, stop) */
+.sp-cam-pill { display: flex; align-items: center; gap: 12px; border-radius: 999px; background: var(--sp-glass-pop); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line), 0 12px 40px -12px rgba(0, 0, 0, 0.8); animation: sp-cam-in 220ms var(--sp-ease) both; }
+.sp-cam-rec { height: 48px; padding: 0 6px 0 18px; }
+.sp-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff453a; box-shadow: 0 0 10px rgba(255, 69, 58, 0.7); animation: sp-pulse 800ms ease-in-out infinite alternate; }
+.sp-rec-time { min-width: 6ch; font: 500 13px var(--sp-mono); color: var(--sp-ink); font-variant-numeric: tabular-nums; }
+.sp-rec-stop { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #ff453a; color: #fff !important; font-size: 12px; font-weight: 600; transition: background-color 160ms var(--sp-ease); }
+.sp-rec-stop:hover { background: #ff5b52; }
+.sp-rec-stop i { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
+.sp-cam-busy { width: min(320px, calc(100vw - 24px)); border-radius: 16px; }
+.sp-cam-busy .sp-prog { width: 100%; }
+
+/* preview sheet */
+.sp-sheet { width: min(520px, calc(100vw - 24px)); padding: 12px; border-radius: 20px; background: var(--sp-glass-pop); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 60px -20px rgba(0, 0, 0, 0.9); animation: sp-cam-in 240ms var(--sp-ease) both; }
+.sp-sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 2px 4px 10px; }
+.sp-sheet-opts { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 0 2px; }
+.sp-sheet-opts[hidden] { display: none; }
+.sp-cam-fps { display: flex; height: 28px; padding: 2px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--sp-line); flex: none; }
+.sp-sheet-note { margin: 0; font-size: 11px; line-height: 1.35; color: var(--sp-ink-3); }
+.sp-sheet-prog { margin-top: 6px; }
+.sp-sheet-prog .sp-prog { padding: 8px 4px 6px; }
+.sp-sheet-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+.sp-sbtn { height: 38px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--sp-ink-2); transition: color 160ms var(--sp-ease), background-color 160ms var(--sp-ease); }
+.sp-sbtn:hover { color: var(--sp-ink); background: var(--sp-fill); }
+.sp-sbtn--primary { color: var(--sp-void) !important; background: var(--sp-ink); }
+.sp-sbtn--primary:hover { background: var(--sp-ink); opacity: 0.88; }
+
+/* filmstrip trimmer (ported from 3dsvg's VideoTrimmer: thumbs, dimmed outside, yellow frame, handles, playhead) */
+.sp-trim-main { display: flex; align-items: center; gap: 8px; }
+.sp-trim-play { width: 36px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 10px; color: var(--sp-ink); }
+.sp-trim-play:hover { background: var(--sp-fill); }
+.sp-trim-play svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sp-trim-play .i-play { fill: currentColor; stroke-width: 1; }
+.sp-trim-play .i-play, .sp-trim-play.is-paused .i-pause { display: none; }
+.sp-trim-play.is-paused .i-play { display: block; }
+.sp-trim-strip { --hw: 14px; position: relative; flex: 1; height: 48px; touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer; }
+.sp-trim-film { position: absolute; top: 0; bottom: 0; left: var(--hw); right: var(--hw); width: calc(100% - 2 * var(--hw)); height: 100%; border-radius: 3px; background: rgba(255, 255, 255, 0.05); }
+.sp-trim-dim { position: absolute; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.62); pointer-events: none; }
+.sp-trim-sel { position: absolute; top: 0; bottom: 0; border-top: 3px solid #ffcc33; border-bottom: 3px solid #ffcc33; border-radius: 6px; pointer-events: none; }
+.sp-trim-head { position: absolute; top: -3px; bottom: -3px; left: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: #fff; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); pointer-events: none; z-index: 2; }
+.sp-trim-h { position: absolute; top: 0; bottom: 0; width: var(--hw); display: grid; place-items: center; background: #ffcc33; color: #6b4c00; cursor: ew-resize; z-index: 3; touch-action: none; }
+.sp-trim-h--s { border-radius: 6px 0 0 6px; }
+.sp-trim-h--e { border-radius: 0 6px 6px 0; }
+.sp-trim-h svg { width: 6px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.sp-trim-h::before { content: ""; position: absolute; inset: -6px -8px; } /* bigger touch target */
+.sp-trim-h:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.sp-trim-times { display: flex; justify-content: space-between; padding: 6px 4px 0 58px; font: 400 10px var(--sp-mono); color: var(--sp-ink-3); font-variant-numeric: tabular-nums; }
+.sp-trim-times #sp-trim-len { color: var(--sp-ink-2); }
+
+@media (max-width: 560px) {
+  .sp-cam-aspect button, .sp-cam-res { padding: 0 8px; }
+  .sp-cam-row { gap: 22px; }
+  .sp-sheet-opts { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-vf-flash { display: none; }
+}

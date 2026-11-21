@@ -107,6 +107,110 @@
         <button type="button" class="sp-btn" id="sp-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-light">Light</button>
         <button type="button" class="sp-btn" id="sp-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-logo">Logo</button>
         <button type="button" class="sp-btn" id="sp-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-export">Export</button>
+        <button type="button" class="sp-btn sp-btn--icon" id="sp-camera" aria-label="Camera" title="Camera (K)" aria-keyshortcuts="K" aria-expanded="false" aria-controls="sp-cam">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.25 5.75c0-.69.56-1.25 1.25-1.25h1.6l.95-1.5h3.9l.95 1.5h1.6c.69 0 1.25.56 1.25 1.25v5.5c0 .69-.56 1.25-1.25 1.25h-9c-.69 0-1.25-.56-1.25-1.25z"/><circle cx="8" cy="8.4" r="2.2"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Camera mode (src/camera.js). Camera UX adapted from 3dsvg by Renato Costa, MIT. -->
+    <div class="sp-cam" id="sp-cam" hidden>
+      <div class="sp-vf" id="sp-vf" aria-hidden="true">
+        <i class="sp-vf-c sp-vf-c--tl"></i><i class="sp-vf-c sp-vf-c--tr"></i><i class="sp-vf-c sp-vf-c--bl"></i><i class="sp-vf-c sp-vf-c--br"></i>
+        <span class="sp-vf-size" id="sp-vf-size"></span>
+        <img class="sp-vf-media" id="sp-vf-img" alt="" hidden>
+        <video class="sp-vf-media" id="sp-vf-video" muted loop playsinline hidden></video>
+        <span class="sp-vf-flash" id="sp-vf-flash"></span>
+      </div>
+
+      <div class="sp-cam-bar" id="sp-cam-bar" role="group" aria-label="Camera">
+        <div class="sp-cam-opts">
+          <div class="sp-cam-aspect" id="sp-cam-aspect" role="radiogroup" aria-label="Aspect ratio">
+            <button type="button" role="radio" data-aspect="free" aria-checked="true">Free</button>
+            <button type="button" role="radio" data-aspect="1:1" aria-checked="false">1:1</button>
+            <button type="button" role="radio" data-aspect="4:5" aria-checked="false">4:5</button>
+            <button type="button" role="radio" data-aspect="9:16" aria-checked="false">9:16</button>
+            <button type="button" role="radio" data-aspect="16:9" aria-checked="false">16:9</button>
+          </div>
+          <span class="sp-div" aria-hidden="true"></span>
+          <button type="button" class="sp-cam-res" id="sp-cam-res" aria-label="Resolution 1080p">1080p</button>
+        </div>
+        <div class="sp-cam-modes" id="sp-cam-modes" role="radiogroup" aria-label="Capture mode">
+          <button type="button" role="radio" data-mode="photo" aria-checked="true">Photo</button>
+          <button type="button" role="radio" data-mode="video" aria-checked="false">Video</button>
+          <button type="button" role="radio" data-mode="loop" aria-checked="false">Loop</button>
+        </div>
+        <div class="sp-cam-row">
+          <button type="button" class="sp-cam-round" id="sp-cam-close" aria-label="Close camera" title="Close (Esc)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+          </button>
+          <button type="button" class="sp-shutter" id="sp-shutter" data-mode="photo" aria-label="Take photo"><span class="sp-shutter-core"></span></button>
+          <button type="button" class="sp-cam-round" id="sp-cam-clear" aria-pressed="false" aria-label="Transparent background" title="Transparent background">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2"/><path class="f" d="M3 5a2 2 0 0 1 2-2h3v5H3zM8 8h5v3a2 2 0 0 1-2 2H8z"/></svg>
+          </button>
+        </div>
+        <p class="sp-cam-note" id="sp-cam-note"></p>
+      </div>
+
+      <div class="sp-cam-pill sp-cam-rec" id="sp-cam-rec" role="group" aria-label="Recording" hidden>
+        <span class="sp-rec-dot" aria-hidden="true"></span>
+        <span class="sp-rec-time" id="sp-rec-time" role="timer" aria-label="Recording time">0:00.0</span>
+        <button type="button" class="sp-rec-stop" id="sp-rec-stop"><i aria-hidden="true"></i>Stop</button>
+      </div>
+
+      <div class="sp-cam-pill sp-cam-busy" id="sp-cam-busy" role="group" aria-label="Rendering" hidden>
+        <div class="sp-prog">
+          <div class="sp-prog-top">
+            <span class="sp-row-t" id="sp-busy-label">Rendering</span>
+            <span class="sp-prog-pct" id="sp-busy-pct">0%</span>
+            <button type="button" class="sp-cancel" id="sp-busy-cancel">Cancel</button>
+          </div>
+          <div class="sp-prog-bar" role="progressbar" aria-label="Render progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-busy-fill"></i></div>
+        </div>
+      </div>
+
+      <div class="sp-sheet" id="sp-sheet" role="dialog" aria-label="Preview" aria-describedby="sp-sheet-meta" hidden>
+        <div class="sp-sheet-head">
+          <span class="sp-row-t" id="sp-sheet-title">Photo</span>
+          <span class="sp-row-s" id="sp-sheet-meta"></span>
+        </div>
+        <div class="sp-trim" id="sp-trim" hidden>
+          <div class="sp-trim-main">
+            <button type="button" class="sp-trim-play" id="sp-trim-play" aria-label="Pause">
+              <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4v8M10.5 4v8"/></svg>
+              <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.8l6.5 4.2-6.5 4.2z"/></svg>
+            </button>
+            <div class="sp-trim-strip" id="sp-trim-strip">
+              <canvas class="sp-trim-film" id="sp-trim-film" aria-hidden="true"></canvas>
+              <i class="sp-trim-dim" id="sp-trim-dim-l"></i><i class="sp-trim-dim" id="sp-trim-dim-r"></i>
+              <i class="sp-trim-sel" id="sp-trim-sel"></i>
+              <i class="sp-trim-head" id="sp-trim-head"></i>
+              <span class="sp-trim-h sp-trim-h--s" id="sp-trim-hs" role="slider" tabindex="0" aria-label="Trim start" data-handle="start"><svg viewBox="0 0 6 16" aria-hidden="true"><path d="M4 3L2 8l2 5"/></svg></span>
+              <span class="sp-trim-h sp-trim-h--e" id="sp-trim-he" role="slider" tabindex="0" aria-label="Trim end" data-handle="end"><svg viewBox="0 0 6 16" aria-hidden="true"><path d="M2 3l2 5-2 5"/></svg></span>
+            </div>
+          </div>
+          <div class="sp-trim-times" aria-hidden="true"><span id="sp-trim-t0">0.0s</span><span id="sp-trim-len">0.0s</span><span id="sp-trim-t1">0.0s</span></div>
+        </div>
+        <div class="sp-sheet-opts" id="sp-sheet-opts" hidden>
+          <div class="sp-cam-fps" id="sp-cam-fps" role="radiogroup" aria-label="Frame rate">
+            <button type="button" role="radio" data-fps="30" aria-checked="false">30 fps</button>
+            <button type="button" role="radio" data-fps="60" aria-checked="true">60 fps</button>
+          </div>
+          <p class="sp-sheet-note" id="sp-sheet-note">Rendered offline, frame by frame: smooth even if the live view stuttered.</p>
+        </div>
+        <div class="sp-sheet-prog" id="sp-sheet-prog" hidden>
+          <div class="sp-prog">
+            <div class="sp-prog-top">
+              <span class="sp-row-t" id="sp-sheet-prog-label">Rendering</span>
+              <span class="sp-prog-pct" id="sp-sheet-prog-pct">0%</span>
+              <button type="button" class="sp-cancel" id="sp-sheet-cancel">Cancel</button>
+            </div>
+            <div class="sp-prog-bar" role="progressbar" aria-label="Render progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-sheet-prog-fill"></i></div>
+          </div>
+        </div>
+        <div class="sp-sheet-actions" id="sp-sheet-actions">
+          <button type="button" class="sp-sbtn" id="sp-retake">Retake</button>
+          <button type="button" class="sp-sbtn sp-sbtn--primary" id="sp-dl">Download</button>
+        </div>
       </div>
     </div>
   </div>
