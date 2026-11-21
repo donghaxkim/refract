@@ -1852,7 +1852,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   /** One emission line's colour: zucconi hue (matches the rainbow), more saturated (a line is monochromatic), zucconi luminance;
    *  past the palette's red/violet ends the brightness follows the eye's sensitivity so deep-red neon lines don't vanish. */
   function lineRGB(l) {
-    const lc = clamp(l, 406, 678), z = zucconi(lc), n = BEAM_NORM, c = [z[0] * n[0], z[1] * n[1], z[2] * n[2]];
+    const lc = clamp(l, 406, 678), z = zucconi(lc), n = BEAM_NORM; let c = [z[0] * n[0], z[1] * n[1], z[2] * n[2]];
+    // violet–blue end: zucconi's fit swings back towards red too early (Hg 435.8 read magenta, 404.7 pure blue); take CIE's hue there
+    const tv = clamp((465 - l) / 25, 0, 1), wv = tv * tv * (3 - 2 * tv);
+    if (wv > 0) { const q = lamRGB(l), k = LUM(c) / (LUM(q) || 1); c = c.map((v, i) => lerp(v, q[i] * k, wv)); }
     const y0 = LUM(c), m = Math.min(c[0], c[1], c[2]) * 0.85; let s = c.map(v => v - m); const y1 = LUM(s) || 1;
     s = s.map(v => v * y0 / y1);
     const k = l === lc ? 1 : cieY(l) / cieY(lc);
@@ -1891,7 +1894,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
   // idle resting aim: light from the upper left (was π + 0.2, lower left), so the rainbow lands on the studio floor
   const REST_ANG = Math.PI - 0.2;
   const POOL = [40, 9, 6, 0.16]; // dark theme: soft pool around a landing (× core width along, × slit height, its softness, share of the light)
-  const ENTRY_K = 0.8; // pool where an incoming beam rises out of the floor, relative to a full landing
+  const ENTRY_K = 0.8;
+  const LINE_LIGHT_K = 3.5; // light theme: thin, saturated emission-line beams wash out on the paper wall, so they get more power there // pool where an incoming beam rises out of the floor, relative to a full landing
 
   // ───────────────────────────────────────── shaders
   const VERT = `#version 300 es
@@ -2713,7 +2717,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const src = this._src, lines = src.kind === 'lines', bands = src.bands;
       const { o, dir, perp } = this._beamRays(ang);
       const waves = mirror ? 1 : bands.length;
-      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? 0.75 : 1); // lines: a slightly finer slit so neighbouring lines separate
+      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK * (lines && THEMES[this.theme].mode ? LINE_LIGHT_K : 1); const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? (THEMES[this.theme].mode ? 1 : 0.75) : 1); // lines: a slightly finer slit so neighbouring lines separate
       const paths = []; // transparent output has no visible room: no clipping, no caustics (the beam just leaves the frame)
       let entry = null; const tot = [0, 0, 0];
       for (let k = 0; k < waves; k++) {
