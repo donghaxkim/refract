@@ -41,24 +41,24 @@
 
     /* ───── material ───── */
     function placeIndicator(anim) {
-      const b = $('button[aria-checked="true"]', seg); if (!b) return;
+      if (!seg) return; const b = $('button[aria-checked="true"]', seg); if (!b) return;
       if (!anim) seg.classList.add('no-anim');
       ind.style.setProperty('--x', b.offsetLeft + 'px');
       ind.style.setProperty('--w', b.offsetWidth + 'px');
       if (!anim) { void ind.offsetWidth; seg.classList.remove('no-anim'); }
     }
     function setMaterial(m, anim) {
-      if (m !== 'glass' && m !== 'chrome') return;
+      if (m !== 'glass') return; // chrome hidden for now
       material = m;
-      $$('button[data-material]', seg).forEach((b) => {
+      if (seg) $$('button[data-material]', seg).forEach((b) => {
         const on = b.dataset.material === m;
         b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
       });
       placeIndicator(anim !== false);
       call('setMaterial', m);
     }
-    seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b) setMaterial(b.dataset.material); });
-    seg.addEventListener('keydown', (e) => {
+    if (seg) seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b) setMaterial(b.dataset.material); });
+    if (seg) seg.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault(); const m = material === 'glass' ? 'chrome' : 'glass';
         setMaterial(m); $('button[data-material="' + m + '"]', seg).focus();
@@ -383,9 +383,7 @@
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      if (k === 'g') setMaterial('glass');
-      else if (k === 'c') setMaterial('chrome');
-      else if (k === 'h') setHidden(!uiHidden);
+      if (k === 'h') setHidden(!uiHidden);
       else if (e.key === ' ' || e.code === 'Space') {
         if (t && t.tagName === 'BUTTON' && t.matches(':focus-visible')) return; // keyboard users: Space activates the focused button
         e.preventDefault();
@@ -411,7 +409,8 @@
 
     /* ───── boot ───── */
     try { const m = engine && engine.getMaterial && engine.getMaterial(); if (m === 'glass' || m === 'chrome') material = m; } catch (e) { /* noop */ }
-    setMaterial(material, false);
+    material = 'glass'; setMaterial(material, false);
+    setTheme('light'); // the light background is the only one for now
     insets();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { placeIndicator(false); insets(); });
     requestAnimationFrame(() => ui.classList.add('is-in')); // don't wait on 'ready' forever
