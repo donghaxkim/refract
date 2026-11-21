@@ -500,7 +500,7 @@
     }
     if (!engine) toast('Renderer unavailable in this browser', 'err', 6000);
 
-    api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
+    api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, isExporting: () => !!exporting, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
     // camera mode (src/camera.js): Photo / Video / Loop with viewfinder, trimmer and offline capture
     if (global.SpectraCamera) { try { api.camera = global.SpectraCamera.init(engine, api); } catch (e) { console.error('[Spectra UI] camera', e); } }
     return api;

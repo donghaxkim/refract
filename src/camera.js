@@ -141,8 +141,14 @@
     if (!canVideo()) $$('button[data-mode="video"], button[data-mode="loop"]', modeGroup).forEach((b) => { b.disabled = true; b.title = 'This browser can’t encode MP4 video'; });
 
     /* ───── open / close ───── */
+    // a render started outside the camera (Export menu PNG / MP4 / 3D) owns the engine: the camera would hide its progress and
+    // Cancel, show a stale frame and fail to shoot, so it can't open until that finishes or is cancelled
+    const BUSY_MSG = 'Finish or cancel the export first';
+    const busyElsewhere = () => (!!engine.busy && !st.rendering) || !!(api.isExporting && api.isExporting());
+    const busyErr = (e) => e && /already running/i.test(e.message || '');
     function openCam() {
       if (st.open) return;
+      if (busyElsewhere()) { toast(BUSY_MSG, null, 2600); return; }
       if (api.close) api.close(true);
       st.open = true; st.session++; st.prevTransparent = !!engine.transparent;
       cam.hidden = false; ui.classList.add('is-cam'); camBtn.setAttribute('aria-expanded', 'true');
@@ -180,7 +186,8 @@
         if (session !== st.session || !blob) return;
         showMedia('photo', blob, { w, h, clear });
       } catch (e) {
-        if (isAbort(e)) toast('Cancelled'); else { console.error('[Spectra camera] photo', e); toast('Photo failed', 'err'); }
+        if (isAbort(e)) toast('Cancelled'); else if (busyErr(e)) toast('Another render is running. ' + BUSY_MSG, 'err', 3200);
+        else { console.error('[Spectra camera] photo', e); toast('Photo failed', 'err'); }
       } finally { st.rendering = false; shutter.classList.remove('is-busy'); shutter.removeAttribute('aria-busy'); }
     }
 
@@ -200,7 +207,8 @@
         showMedia('loop', blob, { w, h });
       } catch (e) {
         if (session !== st.session) return;
-        if (isAbort(e)) toast('Render cancelled'); else { console.error('[Spectra camera] loop', e); toast('MP4 render failed', 'err'); }
+        if (isAbort(e)) toast('Render cancelled'); else if (busyErr(e)) toast('Another render is running. ' + BUSY_MSG, 'err', 3200);
+        else { console.error('[Spectra camera] loop', e); toast('MP4 render failed', 'err'); }
         setState('bar'); shutter.focus({ preventScroll: true });
       } finally { st.rendering = false; }
     }
@@ -389,7 +397,8 @@
         if (api.saveBlob) await api.saveBlob(blob, 'spectra-' + w + 'x' + h + '-' + stamp() + '.mp4');
       } catch (err) {
         if (session !== st.session) return;
-        if (isAbort(err)) toast('Render cancelled'); else { console.error('[Spectra camera] renderTimeline', err); toast('MP4 render failed', 'err', 4200); }
+        if (isAbort(err)) toast('Render cancelled'); else if (busyErr(err)) toast('Another render is running. ' + BUSY_MSG, 'err', 3200);
+        else { console.error('[Spectra camera] renderTimeline', err); toast('MP4 render failed', 'err', 4200); }
       } finally {
         st.rendering = false;
         if (session === st.session) {
@@ -405,6 +414,7 @@
     /* ───── shutter ───── */
     shutter.addEventListener('click', () => {
       if (!st.open || st.state !== 'bar') return;
+      if (busyElsewhere()) { toast('Another render is running. ' + BUSY_MSG, 'err', 3200); return; }
       if (st.mode === 'photo') takePhoto(); else if (st.mode === 'video') startRec(); else renderLoop();
     });
 
