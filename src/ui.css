@@ -226,7 +226,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 #spectra-canvas.is-dragging { cursor: grabbing; }
 
 /* ───── Light popover ───── */
-.sp-pop--light { width: 236px; padding: 10px; }
+.sp-pop--light { width: 252px; padding: 10px; }
 .sp-pop-label { margin: 2px 4px 7px; font: 500 10px var(--sp-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--sp-ink-3); }
 .sp-pop-label + .sp-opts { margin-bottom: 12px; }
 .sp-opts:last-child { margin-bottom: 0 !important; }
@@ -238,6 +238,12 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 .sp-ico-beam::before { content: ""; position: absolute; left: -4px; top: 13px; width: 48%; height: 2px; background: #fff; transform: rotate(-6deg); box-shadow: 0 0 6px rgba(255,255,255,.7); }
 .sp-ico-beam::after { content: ""; position: absolute; left: 46%; top: 6px; width: 60%; height: 18px; background: var(--sp-spectrum); clip-path: polygon(0 45%, 100% 0, 100% 100%, 0 58%); opacity: .9; }
 .sp-ico-studio { background: radial-gradient(60% 90% at 30% 0%, rgba(255,255,255,.55), transparent 70%), radial-gradient(40% 80% at 85% 100%, rgba(255,255,255,.22), transparent 70%), #08080a; }
+.sp-opts--3 { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.sp-opts--3 .sp-opt { gap: 7px; padding: 7px; min-width: 0; }
+.sp-opts--3 .sp-row-t { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sp-opts--3 .sp-opt-ico { height: 18px; border-radius: 5px; }
+.sp-ico-src i { position: absolute; left: 4px; right: 4px; top: 50%; height: 8px; margin-top: -4px; border-radius: 1px; background-repeat: no-repeat; }
+.sp-opt:focus-visible { outline: 2px solid var(--sp-line-2); outline-offset: 1px; }
 .sp-ico-dark { background: radial-gradient(70% 90% at 50% 50%, #1a1a1d, #030304); }
 .sp-ico-light { background: radial-gradient(70% 90% at 50% 40%, #f4f2ee, #d9d6d0); }
 

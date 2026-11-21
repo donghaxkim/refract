@@ -40,11 +40,70 @@
   }
   let SPEC_NORM_SHADER;
   SPEC_NORM_SHADER = specNorm(400, 700, 4000);
+  const BEAM_NORM = specNorm(400, 700, BEAM_WAVES);
   const BEAM_COLORS = (() => {
-    const n = specNorm(400, 700, BEAM_WAVES); const out = [];
+    const n = BEAM_NORM; const out = [];
     for (let i = 0; i < BEAM_WAVES; i++) { const l = 400 + 300 * (i + 0.5) / BEAM_WAVES; const c = zucconi(l); out.push({ lam: l, rgb: [c[0] * n[0], c[1] * n[1], c[2] * n[2]] }); }
     return out;
   })();
+
+  // ───────────────────────────────────────── light sources (real spectra)
+  // Continuous sources weight the 56 beam bands by their spectral power; line sources trace one ribbon per emission line.
+  // Line data: NIST Handbook of Basic Atomic Spectroscopic Data (air wavelengths, nm; relative intensities as listed there,
+  // except Ne 540.1 nm: NIST lists 200, lowered to 60 to match how weak it looks in real neon discharge lamps).
+  const D65 = [82.7549, 91.486, 93.4318, 86.6823, 104.865, 117.008, 117.812, 114.861, 115.923, 108.811, 109.354, 107.802, 104.79, 107.689, 104.405, 104.046, 100.0, 96.3342, 95.788, 88.6856, 90.0062, 89.5991, 87.6987, 83.2886, 83.6992, 80.0268, 80.2146, 82.2778, 78.2842, 69.7213, 71.6091]; // CIE D65, 400–700 nm / 10 nm
+  const planck = (lam, T) => { const l = lam * 1e-9; return 1 / (Math.pow(l, 5) * (Math.exp(1.4388e-2 / (l * T)) - 1)); };
+  const SOURCE_DEFS = {
+    white: { label: 'White', kind: 'cont', spd: null }, // equal energy (the original look)
+    sun: { label: 'Sun', kind: 'cont', spd: (l) => { const f = clamp((l - 400) / 10, 0, 29.9999), i = Math.floor(f); return lerp(D65[i], D65[i + 1], f - i); } },
+    tungsten: { label: 'Tungsten', kind: 'cont', spd: (l) => planck(l, 2700) },
+    neon: { label: 'Neon', kind: 'lines', lines: [[540.056, 60], [585.249, 200], [588.190, 100], [594.483, 50], [597.553, 60], [603.000, 100], [607.434, 100], [609.616, 30], [614.306, 100], [616.359, 100], [621.728, 100], [626.650, 100], [633.443, 100], [638.299, 100], [640.225, 200], [650.653, 150], [659.895, 100], [667.828, 50], [692.947, 1000], [703.241, 300]] },
+    sodium: { label: 'Sodium', kind: 'lines', lines: [[498.281, 5], [568.820, 8], [588.995, 1000], [589.592, 500], [616.075, 3]] },
+    mercury: { label: 'Mercury', kind: 'lines', lines: [[404.656, 400], [435.833, 1000], [546.074, 500], [576.960, 50], [579.066, 60]] },
+  };
+  const LUM = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const cieY = (l) => 0.821 * g1(l, 568.8, 46.9, 40.5) + 0.286 * g1(l, 530.9, 16.3, 31.1);
+  /** One emission line's colour: zucconi hue (matches the rainbow), more saturated (a line is monochromatic), zucconi luminance;
+   *  past the palette's red/violet ends the brightness follows the eye's sensitivity so deep-red neon lines don't vanish. */
+  function lineRGB(l) {
+    const lc = clamp(l, 406, 678), z = zucconi(lc), n = BEAM_NORM, c = [z[0] * n[0], z[1] * n[1], z[2] * n[2]];
+    const y0 = LUM(c), m = Math.min(c[0], c[1], c[2]) * 0.85; let s = c.map(v => v - m); const y1 = LUM(s) || 1;
+    s = s.map(v => v * y0 / y1);
+    const k = l === lc ? 1 : cieY(l) / cieY(lc);
+    return s.map(v => v * k);
+  }
+  function buildSource(id) {
+    const D = SOURCE_DEFS[id]; let bands;
+    if (!D.spd && D.kind === 'cont') bands = BEAM_COLORS;
+    else if (D.kind === 'cont') { const w = BEAM_COLORS.map(b => D.spd(b.lam)); const mx = Math.max(...w); bands = BEAM_COLORS.map((b, i) => ({ lam: b.lam, rgb: b.rgb.map(v => v * w[i] / mx) })); }
+    else bands = D.lines.slice().sort((a, b) => a[0] - b[0]).map(([lam, w]) => ({ lam, rgb: lineRGB(lam).map(v => v * w) }));
+    // normalise: the whole source is as bright as white (Σ luminance = BEAM_WAVES), keeping its colour cast
+    const tot = [0, 0, 0]; bands.forEach(b => { tot[0] += b.rgb[0]; tot[1] += b.rgb[1]; tot[2] += b.rgb[2]; });
+    // …but a saturated source (neon) is capped by its strongest channel, or it would bloom into a haze
+    let K = D.spd || D.kind === 'lines' ? BEAM_WAVES / LUM(tot) : 1;
+    if (K !== 1) K *= Math.min(1, 1.1 * BEAM_WAVES / (K * Math.max(tot[0], tot[1], tot[2])));
+    if (K !== 1) bands = bands.map(b => ({ lam: b.lam, rgb: b.rgb.map(v => v * K) }));
+    const color = D.spd || D.kind === 'lines' ? tot.map(v => v * K / BEAM_WAVES) : [1, 1, 1]; // integrated colour, luminance 1
+    const lums = bands.map(b => LUM(b.rgb)), lsum = lums.reduce((a, b) => a + b, 0);
+    let lamC = 0; bands.forEach((b, i) => { lamC += b.lam * lums[i] / lsum; });
+    const lams = bands.filter((b, i) => lums[i] > lsum * 0.004).map(b => b.lam);
+    let lo = Math.min(...lams), hi = Math.max(...lams);
+    lo = Math.min(lo, 420); hi = Math.max(hi, 680); // _bestOffset probe: white's span (same route as white) ∪ the source's own lines (all coherent)
+    // shader: 0 = white (original path), 1 = continuous (SPD table), 2 = lines (inverse-CDF sampled by luminance)
+    const mode = !D.spd && D.kind === 'cont' ? 0 : (D.kind === 'cont' ? 1 : 2);
+    const spd = new Float32Array(31).fill(1), lines = new Float32Array(48);
+    if (mode === 1) { const v = []; for (let i = 0; i <= 30; i++) v.push(D.spd(400 + i * 10)); const mx = Math.max(...v); v.forEach((x, i) => { spd[i] = x / mx; }); }
+    let lineN = 0;
+    if (mode === 2) { let acc = 0; bands.forEach((b, i) => { if (lineN >= 24) return; acc += lums[i] / lsum; lines[lineN * 2] = b.lam; lines[lineN * 2 + 1] = Math.min(acc, 1); lineN++; }); lines[lineN * 2 - 1] = 1.0001; }
+    return { id, label: D.label, kind: D.kind, bands, color, lamC: mode ? lamC : 550, lo, hi, mode, spd, lines, lineN };
+  }
+  const SOURCES = {}; for (const id in SOURCE_DEFS) SOURCES[id] = buildSource(id);
+
+  // ───────────────────────────────────────── studio surfaces (fixed in the world): back wall, floor, and a curved cove between them
+  const WALL_Z = -1.3, FLOOR_Y = -1.02, COVE_R = 0.55, COVE_Y = FLOOR_Y + COVE_R, COVE_Z = WALL_Z + COVE_R;
+  const SURF_GLSL = `const float WALL_Z = ${WALL_Z.toFixed(4)}, FLOOR_Y = ${FLOOR_Y.toFixed(4)}, COVE_R = ${COVE_R.toFixed(4)}, COVE_Y = ${COVE_Y.toFixed(4)}, COVE_Z = ${COVE_Z.toFixed(4)};`;
+  // idle resting aim: light from the upper left (was π + 0.2, lower left), so the rainbow lands on the studio floor
+  const REST_ANG = Math.PI - 0.2;
 
   // ───────────────────────────────────────── shaders
   const VERT = `#version 300 es
@@ -56,6 +115,7 @@
   uniform vec3 uBg; uniform vec2 uRes, uCenter, uJitter; uniform int uMode;
   uniform sampler2D uField; uniform mat3 uRotT; uniform float uCamDist, uTanFov, uShadow, uEnvYaw;
   uniform float uFlat; // embed: custom page colour; 1 = backdrop exactly uBg at the frame edge (no blue lift, no grain)
+  ${SURF_GLSL}
   float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
   float vn(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f);
     return mix(mix(h12(i),h12(i+vec2(1,0)),f.x), mix(h12(i+vec2(0,1)),h12(i+vec2(1,1)),f.x), f.y); }
@@ -65,23 +125,33 @@
       vec3 c0 = uBg*(0.95 + 0.6*g + n) + vec3(0.0006,0.0007,0.0011)*(1.0-g);
       if (uFlat > 0.0){ vec2 e = 1.0 - abs(ndc + uCenter); float ef = smoothstep(0.0, 0.55, min(e.x, e.y*1.4)); c0 = mix(c0, uBg*(1.0 + (0.55*g + n*0.6)*ef), uFlat); }
       o = vec4(c0, 1.0); return; }
-    // light: a paper wall 1.3 units behind the logo, lit by a soft window from the upper left
-    vec3 rd = normalize(vec3(ndc.x*(uRes.x/uRes.y)*uTanFov, ndc.y*uTanFov, -1.0));
-    float t = (uCamDist + 1.3)/(-rd.z); vec3 W = vec3(0.0,0.0,uCamDist) + rd*t;
-    vec2 w = W.xy;
+    // light: a paper sweep — wall 1.3 units behind the logo curving through a cove into the floor — lit by a soft window from the upper left
+    vec3 rd = normalize(vec3(ndc.x*(uRes.x/uRes.y)*uTanFov, ndc.y*uTanFov, -1.0)), ro = vec3(0.0,0.0,uCamDist);
+    float t = (uCamDist - WALL_Z)/(-rd.z); vec3 W = ro + rd*t;
+    vec2 w = W.xy; float phi = 0.0; // phi: 0 on the wall … π/2 on the floor
+    if (W.y < COVE_Y){
+      float tf = rd.y < 0.0 ? (FLOOR_Y - ro.y)/rd.y : 1e9; vec3 F = ro + rd*tf;
+      if (F.z >= COVE_Z){ W = F; phi = 1.5707963; w = vec2(F.x, COVE_Y - COVE_R*1.5707963 - (F.z - COVE_Z)); }
+      else { vec2 oc = ro.yz - vec2(COVE_Y, COVE_Z); float a = dot(rd.yz, rd.yz), b = dot(oc, rd.yz), c = dot(oc, oc) - COVE_R*COVE_R;
+        float tc = (-b + sqrt(max(b*b - a*c, 0.0)))/a; W = ro + rd*tc;
+        phi = atan(COVE_Y - W.y, COVE_Z - W.z); w = vec2(W.x, COVE_Y - COVE_R*phi); }
+    }
+    float flo = phi/1.5707963;
     float lit = 0.86 + 0.16*smoothstep(1.8, -1.2, w.x - w.y*0.6) - 0.06*smoothstep(0.6, 2.6, length(w*vec2(0.55,0.8)));
     // window mullions: soft diagonal bars of shadow (gobo)
     vec2 g = mat2(0.906,-0.423,0.423,0.906)*(w + vec2(uEnvYaw*0.6, 0.0)) + vec2(1.4,0.3);
     float bars = smoothstep(0.05, 0.16, abs(fract(g.x*0.55)-0.5)) * smoothstep(0.04, 0.14, abs(fract(g.y*0.42)-0.5));
     float win = smoothstep(2.6, 0.4, length((g - vec2(0.2,0.1))*vec2(0.55,0.75)));
     lit *= mix(1.0, mix(0.9, 1.06, bars), win);
+    lit *= mix(1.0, 0.93, smoothstep(0.0, 1.0, flo)) * (1.0 - 0.07*sin(phi*2.0)); // floor a touch under the wall; soft occlusion in the cove
     // soft shadow of the logo, projected along the window light onto the wall
     vec3 Ls = normalize(vec3(-0.42 + uEnvYaw*0.35, 0.5, 1.0));
-    vec3 P = W + Ls*(1.3/Ls.z); vec3 pl = uRotT*P;
+    vec3 P = W + Ls*(max(-W.z, 0.0)/Ls.z); vec3 pl = uRotT*P;
     vec2 uv = clamp(vec2(pl.x*0.5+0.5, 0.5-pl.y*0.5), 0.0, 1.0);
     float d = texture(uField, uv).g + length(max(abs(pl.xy)-1.0, 0.0));
     float sh = smoothstep(0.12, -0.08, d);
     sh *= uShadow > 1.2 ? 0.55 : (0.42 - 0.22*smoothstep(-0.03, -0.14, d)); // glass: lighter core, darker rim
+    sh *= smoothstep(0.1, -0.35, W.z); // the floor in front of the logo plane fades out of the projected shadow (no hard edge)
     lit *= 1.0 - sh;
     float paper = (vn(gl_FragCoord.xy*0.35) - 0.5)*0.025 + (h12(gl_FragCoord.xy) - 0.5)*0.012;
     if (uFlat > 0.0){ vec2 e = 1.0 - abs(ndc + uCenter); float ef = smoothstep(0.0, 0.5, min(e.x, e.y*1.4));
@@ -113,8 +183,27 @@
     gl_PointSize = uPx*(0.9 + 1.8*h(s+1.0))*(4.2/max(c.w,0.5));
   }`;
   const DUST_FRAG = `#version 300 es
-  precision highp float; in float vB; out vec4 o;
-  void main(){ vec2 q = gl_PointCoord*2.0-1.0; float d = dot(q,q); float a = exp(-d*3.0)*(1.0-step(1.0,d)); o = vec4(vec3(1.0)*vB*a, 0.0); }`;
+  precision highp float; in float vB; out vec4 o; uniform vec3 uTint; // light source colour (white = 1,1,1)
+  void main(){ vec2 q = gl_PointCoord*2.0-1.0; float d = dot(q,q); float a = exp(-d*3.0)*(1.0-step(1.0,d)); o = vec4(uTint*vB*a, 0.0); }`;
+
+  // caustic: where each wavelength's exit ray lands, one splat per band. A splat is that band's slit-shaped beam footprint swept
+  // across to its neighbours (erf partition of unity → a seamless band for continuous light, separate stripes for lines)
+  const CAUSTIC_VERT = `#version 300 es
+  layout(location=0) in vec3 aPos; layout(location=1) in vec2 aT; layout(location=2) in vec4 aSeg; layout(location=3) in vec3 aCol; layout(location=4) in vec3 aShape;
+  uniform mat4 uVP; out vec2 vT; out vec4 vSeg; out vec3 vCol; out vec3 vShape;
+  void main(){ gl_Position = uVP*vec4(aPos,1.0); vT = aT; vSeg = aSeg; vCol = aCol; vShape = aShape; }`;
+  const CAUSTIC_FRAG = `#version 300 es
+  precision highp float; in vec2 vT; in vec4 vSeg; in vec3 vCol; in vec3 vShape; out vec4 o;
+  float erf1(float x){ float s = sign(x); x = abs(x); float t = 1.0/(1.0 + 0.3275911*x);
+    return s*(1.0 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*exp(-x*x)); }
+  void main(){
+    vec2 e = vSeg.zw - vSeg.xy; float L = length(e); vec2 eh = L > 1e-6 ? e/L : vec2(1.0, 0.0);
+    vec2 q = vT - vSeg.xy; float u = dot(q, eh), v = eh.x*q.y - eh.y*q.x;
+    float sg = vShape.x, hs = vShape.y, sv = vShape.z;
+    float X = L > 0.05*sg ? 0.5*(erf1(u/sg) - erf1((u-L)/sg))/L : exp(-(u-0.5*L)*(u-0.5*L)/(sg*sg))/(sg*1.7724539); // ∫X du = 1
+    float Y = 0.5*(erf1((v+hs)/sv) - erf1((v-hs)/sv))/(2.0*hs);                                                          // ∫Y dv = 1
+    o = vec4(vCol*X*Y, 0.0);
+  }`;
 
   const COMMON = `
   float g1(float x, float mu, float s1, float s2){ float t = (x-mu)/(x<mu?s1:s2); return exp(-0.5*t*t); }
@@ -135,12 +224,15 @@
   uniform vec3 uChromeTint; uniform float uSpectral;
   uniform int uLightCount; uniform vec3 uLD[6]; uniform vec3 uLT[6]; uniform vec3 uLB[6]; uniform vec2 uLS[6]; uniform vec3 uLC[6]; uniform int uLK[6];
   uniform float uAmbient, uHorizon; uniform vec3 uUp; uniform vec3 uSpecNorm; uniform float uSky, uGround, uSceneFloor; uniform int uDebug;
+  uniform int uSrcMode, uLineN; uniform float uSpd[31]; uniform vec2 uLines[24]; // light source: 0 white, 1 continuous SPD, 2 emission lines
   ${COMMON}
   vec3 bump3(vec3 x, vec3 y){ vec3 r = 1.0 - x*x; return clamp(r - y, 0.0, 1.0); }
   vec3 zucconi(float w){ float x = clamp((w-400.0)/300.0, 0.0, 1.0);
     return bump3(vec3(3.54585104,2.93225262,2.41593945)*(x-vec3(0.69549072,0.49228336,0.27699880)), vec3(0.02312639,0.15225084,0.52607955))
          + bump3(vec3(3.90307140,3.21182957,3.96587128)*(x-vec3(0.11748627,0.86755042,0.66077860)), vec3(0.84897130,0.88445281,0.73949448)); }
   vec3 specW(float l){ return zucconi(l)*uSpecNorm; }
+  float spdAt(float l){ float f = clamp((l-400.0)/10.0, 0.0, 29.999); int i = int(f); return mix(uSpd[i], uSpd[i+1], f-float(i)); }
+  float lineAt(float u){ float l = uLines[0].x; for (int i=0;i<24;i++){ if (i>=uLineN) break; l = uLines[i].x; if (u <= uLines[i].y) break; } return l; }
   vec2 toUv(vec2 p){ return vec2(p.x*0.5+0.5, 0.5-p.y*0.5); }
   float outside(vec2 p){ return length(max(abs(p)-1.0, 0.0)); }
   vec2 fieldB(vec2 p){ return texture(uField, clamp(toUv(p),0.0,1.0)).rg + outside(p); }
@@ -212,11 +304,13 @@
     float F = fresnel(ci, 1.0, uIor);
     vec3 R = env(reflect(rd,n));
     vec3 col = R*F + panelHighlight(R, ci);
-    vec3 acc = vec3(0.0), wsum = vec3(0.0);
+    vec3 acc = vec3(0.0), wsum = vec3(0.0); vec3 accY = vec3(0.0); float wY = 0.0;
     const int K = 6;
     for (int k=0;k<K;k++){
       float lam = 400.0 + 300.0*fract((float(k)+0.5)/float(K) + uLamOffset);
-      vec3 w = specW(lam); float nl = iorAt(lam);
+      if (uSrcMode == 2) lam = lineAt(fract((float(k)+0.5)/float(K) + uLamOffset)); // importance-sampled emission lines
+      vec3 w = specW(lam); if (uSrcMode == 1) w *= spdAt(lam);
+      float nl = iorAt(lam);
       vec3 dir = refract(rd, n, 1.0/nl);
       vec3 pos = p - n*0.0012; float thr = 1.0-F; vec3 L = vec3(0.0); vec3 trans = vec3(1.0);
       for (int b=0;b<2;b++){
@@ -233,7 +327,10 @@
         if (thr < 0.02) break;
       }
       acc += L*w; wsum += w;
+      if (uSrcMode == 2){ float y = dot(w, vec3(0.2126,0.7152,0.0722)); accY += L*y; wY += y; }
     }
+    if (uSrcMode == 2){ // a channel the lines barely reach falls back to the grey-weighted average: no colour cast on the backdrop
+      float e = 0.15*max(wsum.r, max(wsum.g, wsum.b)); return col + (acc + accY/max(wY,1e-4)*e)/max(wsum + e, vec3(1e-4)); }
     return col + acc/max(wsum, vec3(0.1));
   }
   vec3 shadeChrome(vec3 p, vec3 n, vec3 rd){
@@ -482,6 +579,24 @@
   const smooth01 = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
   const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const add3 = (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
+  // ── studio surfaces on the CPU (same sweep as BG_FRAG): is a point in the room, and where does a ray leave it?
+  function inRoom(p) {
+    if (p[1] < FLOOR_Y || p[2] < WALL_Z) return false;
+    if (p[1] < COVE_Y && p[2] < COVE_Z) { const dy = p[1] - COVE_Y, dz = p[2] - COVE_Z; return dy * dy + dz * dz <= COVE_R * COVE_R; }
+    return true;
+  }
+  /** First surface hit along o + d·t, t ∈ (0, tmax], for a ray inside the room → { t, n } (n faces the room) or null. */
+  function surfHit(o, d, tmax) {
+    let best = null; const take = (t, n) => { if (t > 1e-5 && t <= tmax && (!best || t < best.t)) best = { t, n }; };
+    if (d[1] < 0) { const t = (FLOOR_Y - o[1]) / d[1]; if (o[2] + d[2] * t >= COVE_Z) take(t, [0, 1, 0]); }
+    if (d[2] < 0) { const t = (WALL_Z - o[2]) / d[2]; if (o[1] + d[1] * t >= COVE_Y) take(t, [0, 0, 1]); }
+    const a = d[1] * d[1] + d[2] * d[2];
+    if (a > 1e-12) {
+      const oy = o[1] - COVE_Y, oz = o[2] - COVE_Z, b = oy * d[1] + oz * d[2], c = oy * oy + oz * oz - COVE_R * COVE_R, D = b * b - a * c;
+      if (D > 0) { const t = (-b + Math.sqrt(D)) / a, y = oy + d[1] * t, z = oz + d[2] * t; if (y <= 1e-6 && z <= 1e-6) take(t, [0, -y / COVE_R, -z / COVE_R]); }
+    }
+    return best;
+  }
   function refract3(v, n, eta) { const c = -dot3(v, n); const k = 1 - eta * eta * (1 - c * c); if (k < 0) return null; const s = eta * c - Math.sqrt(k); return [eta * v[0] + s * n[0], eta * v[1] + s * n[1], eta * v[2] + s * n[2]]; }
 
   // ───────────────────────────────────────── embed helpers: CSS colour → sRGB, tone curves (exact JS copies of COMPOSITE), inverse
@@ -533,7 +648,7 @@
       this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
       this.p = {
         bg: program(gl, VERT, BG_FRAG), beam: program(gl, BEAM_VERT, BEAM_FRAG), dust: program(gl, DUST_VERT, DUST_FRAG),
-        glass: program(gl, VERT, GLASS_FRAG), pre: program(gl, VERT, BLOOM_PRE), down: program(gl, VERT, BLOOM_DOWN), up: program(gl, VERT, BLOOM_UP), comp: program(gl, VERT, COMPOSITE),
+        glass: program(gl, VERT, GLASS_FRAG), caustic: program(gl, CAUSTIC_VERT, CAUSTIC_FRAG), pre: program(gl, VERT, BLOOM_PRE), down: program(gl, VERT, BLOOM_DOWN), up: program(gl, VERT, BLOOM_UP), comp: program(gl, VERT, COMPOSITE),
       };
       // fullscreen triangle
       this.quadVao = gl.createVertexArray(); gl.bindVertexArray(this.quadVao);
@@ -546,6 +661,11 @@
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 28, 12);
       gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 28, 24);
       this.beamCount = 0;
+      // caustics: light landing on the wall / floor (same CPU-traced paths as the beam)
+      this.causticVao = gl.createVertexArray(); gl.bindVertexArray(this.causticVao);
+      this.causticBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.causticBuf);
+      [[0, 3, 0], [1, 2, 12], [2, 4, 20], [3, 3, 36], [4, 3, 48]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 60, off); });
+      this.causticCount = 0; this._causticArr = new Float32Array(0);
       // dust
       this.dustVao = gl.createVertexArray(); gl.bindVertexArray(this.dustVao);
       const N = 260, dd = new Float32Array(N * 4); let s = 7;
@@ -561,12 +681,12 @@
       this.field = null; this.fi = { size: 1, extent: [0.5, 0.5], maxInset: 0.05, blurInset: 0.05 };
       this.beam = new Beam3D();
 
-      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'dark'; this.lightMode = 'beam'; this.envYaw = 0; this.envYawT = 0;
+      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'dark'; this.lightMode = 'beam'; this.source = 'white'; this._src = SOURCES.white; this.envYaw = 0; this.envYawT = 0;
       this.listeners = {};
       this.time = 0; this.frame = 0; this.samples = 0; this.paused = false;
       this.pointer = null; this.lastPointerT = -1e9;
-      this.aim = { ang: Math.PI + 0.22, angV: 0, yaw: 0, pitch: 0 }; // beam direction angle (where the light comes FROM), tilt
-      this.target = { ang: Math.PI + 0.22, yaw: 0, pitch: 0 };
+      this._restAng = REST_ANG; this.aim = { ang: REST_ANG - 0.02, angV: 0, yaw: 0, pitch: 0 }; // beam direction angle (where the light comes FROM), tilt
+      this.target = { ang: REST_ANG - 0.02, yaw: 0, pitch: 0 };
       this.rot = { yaw: 0, pitch: 0, vy: 0, vp: 0, drag: false, reset: false };
       this.ins = { r: 0, b: 0 }; this.autoScale = 1; this._ft = 16; this._scaleT = 0;
       this.main = {}; this.busy = false; this._cancel = false; this._lastT = performance.now(); this._fpsA = 0; this._fpsN = 0;
@@ -606,6 +726,9 @@
     getTheme() { return this.theme; }
     setLightMode(m) { if (m !== 'beam' && m !== 'studio') return; if (m === this.lightMode) return; this.lightMode = m; this._applyLook(); this._dirty = true; }
     getLightMode() { return this.lightMode; }
+    /** Light source spectrum: 'white' (equal energy, default), 'sun' (D65), 'tungsten' (2700 K), 'neon', 'sodium', 'mercury'. */
+    setLightSource(id) { if (!SOURCES[id] || id === this.source) return; this.source = id; this._src = SOURCES[id]; this._applyLook(); this._bestAng = null; this._dirty = true; }
+    getLightSource() { return this.source; }
     setMaterial(m) { if (m !== 'glass' && m !== 'chrome') return; if (m === this.material) return; this.material = m; this._applyLook(); this._dirty = true; }
     getMaterial() { return this.material; }
     setPointer(x, y) {
@@ -710,6 +833,8 @@
       gl.uniform1f(u.uAmbient, chromeM ? (T.mode ? 0.05 : 0.0) : (T.ambient != null ? T.ambient : (studio ? L.ambient * 3 : L.ambient))); gl.uniform1f(u.uHorizon, chromeM ? 0 : (T.mode ? 0.5 : L.horizon)); gl.uniform3fv(u.uSpecNorm, SPEC_NORM_SHADER);
       gl.uniform1f(u.uEnvThrough, T.mode ? (studio ? 0.25 : 0.08) : (studio ? 0.75 : (L.envThrough || 0)));
       gl.uniform1f(u.uCauchyB, CAUCHY_B * (studio ? 0.5 : 0.22));
+      const src = this._src; gl.uniform1i(u.uSrcMode, src.mode); gl.uniform1i(u.uLineN, src.lineN); gl.uniform1fv(u.uSpd, src.spd); gl.uniform2fv(u.uLines, src.lines);
+      const tint = studio && src.mode ? src.color : [1, 1, 1]; // studio: the key lights take the source's colour
       const S = this.shape, th = S.thickness, ro = S.roundness;
       const depth = clamp(L.shape.depth * Math.pow(2, (th - 0.5) * 2.4), 0.012, Math.max(fi.maxInset * (1.6 + 3.4 * th), 0.05));
       const bevelMax = Math.min(depth * 0.98, Math.max(fi.maxInset * 0.72, 0.004)); // keep the surface off the stroke's centre ridge
@@ -725,7 +850,7 @@
         const az = l.az * DEG, el = l.el * DEG; const d = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
         let t = cross([0, 1, 0], d); if (Math.hypot(...t) < 1e-3) t = [1, 0, 0]; t = norm3(t); const b = norm3(cross(d, t));
         const r = (l.rot || 0) * DEG, cr = Math.cos(r), sr = Math.sin(r);
-        return { d, t: [t[0] * cr + b[0] * sr, t[1] * cr + b[1] * sr, t[2] * cr + b[2] * sr], b: [-t[0] * sr + b[0] * cr, -t[1] * sr + b[1] * cr, -t[2] * sr + b[2] * cr], hs: [l.w * 0.5 * DEG, l.h * 0.5 * DEG], c: l.col.map(v => v * l.i * (this.lightMode === 'studio' ? 1.5 : 1) * (this.material === 'chrome' ? 1 : THEMES[this.theme].lightK)), k: l.kind };
+        return { d, t: [t[0] * cr + b[0] * sr, t[1] * cr + b[1] * sr, t[2] * cr + b[2] * sr], b: [-t[0] * sr + b[0] * cr, -t[1] * sr + b[1] * cr, -t[2] * sr + b[2] * cr], hs: [l.w * 0.5 * DEG, l.h * 0.5 * DEG], c: l.col.map((v, ci) => v * tint[ci] * l.i * (this.lightMode === 'studio' ? 1.5 : 1) * (this.material === 'chrome' ? 1 : THEMES[this.theme].lightK)), k: l.kind };
       });
       if (this._bgSrgb !== undefined || this.transparent) this._syncBg();
     }
@@ -745,15 +870,15 @@
     /** Pick the line through the logo whose exit spectrum is widest (hollow / symmetric logos cancel dispersion). */
     _bestOffset(ang, R) {
       if (!this.beam.ok || this.material === 'chrome') return 0.06;
-      let best = 0.06, bestScore = -1;
+      let best = 0.06, bestScore = -1; const lo = this._src.lo, hi = this._src.hi; // probe the source's own wavelength span
       const ext = Math.max(this.fi.extent[0], this.fi.extent[1]);
       const last = (P) => { const a = P[P.length - 1], b = P[P.length - 2]; return norm3([a[0] - b[0], a[1] - b[1], a[2] - b[2]]); };
       const cur = this._bestOff; let curScore = -1;
       for (let o = -ext * 0.85; o <= ext * 0.85 + 1e-6; o += ext * 0.05) {
         const { o: org, dir } = this._beamRays(ang, o);
-        const a = this.beam.trace(org, dir, 420, false, R); if (a.length < 4) continue;
-        const b = this.beam.trace(org, dir, 680, false, R); if (b.length !== a.length) continue;
-        const m = this.beam.trace(org, dir, 550, false, R); if (m.length !== a.length) continue; // one coherent route for all colours
+        const a = this.beam.trace(org, dir, lo, false, R); if (a.length < 4) continue;
+        const b = this.beam.trace(org, dir, hi, false, R); if (b.length !== a.length) continue;
+        const m = this.beam.trace(org, dir, (lo + hi) / 2, false, R); if (m.length !== a.length) continue; // one coherent route for all colours
         const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1));
         const e = Math.min(a[a.length - 1][5], b[b.length - 1][5]);
         const score = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
@@ -765,29 +890,92 @@
     }
     _buildBeam(ang, R) {
       const mirror = this.material === 'chrome';
+      const src = this._src, lines = src.kind === 'lines', bands = src.bands;
       const { o, dir, perp } = this._beamRays(ang);
-      const waves = mirror ? 1 : BEAM_WAVES;
-      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5;
+      const waves = mirror ? 1 : bands.length;
+      const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5 * (lines && !mirror ? 0.75 : 1); // lines: a slightly finer slit so neighbouring lines separate
       const paths = [];
       for (let k = 0; k < waves; k++) {
-        const bc = mirror ? { lam: 550, rgb: [1, 1, 1] } : BEAM_COLORS[k];
-        paths.push({ P: this.beam.trace(o, dir, bc.lam, mirror, R), rgb: bc.rgb });
+        const bc = mirror ? { lam: src.lamC, rgb: src.color } : bands[k];
+        const P = this.beam.trace(o, dir, bc.lam, mirror, R);
+        paths.push({ P, rgb: bc.rgb, hit: this._clipToSurfaces(P) }); // ribbons end where the light lands
       }
-      const base = I0 / 1.4 / waves;
+      const base = I0 / 1.4 / (mirror ? 1 : BEAM_WAVES); // band colours carry the source's power; Σ luminance = BEAM_WAVES
+      this._causticArr = this._buildCaustic(paths, base, w0, lines || mirror);
       const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
       const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
       for (let k = 0; k < waves; k++) {
         const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
-        const same = !!B && A.length === B.length;
+        const same = !lines && !!B && A.length === B.length; // emission lines: separate ribbons, no sheet between them
         const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
         const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : 0;
         for (let i = 0; i + 1 < A.length; i++) {
           const n = nRef(i, A);
-          this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
+          this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror || lines ? 0 : 1, n);
           if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base, w0, n);
         }
       }
       return new Float32Array(V);
+    }
+    /** Truncate a traced polyline (in place) at the first studio surface it reaches from inside the room. Returns the landing or null. */
+    _clipToSurfaces(P) {
+      for (let i = 0; i + 1 < P.length; i++) {
+        let a = P[i]; const b = P[i + 1]; let t0 = 0;
+        const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        if (!inRoom(a)) { // a beam that starts below the floor (off-screen) only counts once it has entered the room
+          if (d[1] <= 0 || a[1] >= FLOOR_Y) continue; t0 = (FLOOR_Y - a[1]) / d[1] + 1e-4; if (t0 >= 1) continue;
+          if (!inRoom([a[0] + d[0] * t0, a[1] + d[1] * t0, a[2] + d[2] * t0])) continue;
+        }
+        const h = surfHit([a[0] + d[0] * t0, a[1] + d[1] * t0, a[2] + d[2] * t0], d, 1 - t0); if (!h) continue;
+        const q = this._lerpPt(a, b, t0 + h.t); P[i + 1] = q; P.length = i + 2;
+        const L = Math.hypot(d[0], d[1], d[2]);
+        return { p: [q[0], q[1], q[2]], n: h.n, d: [d[0] / L, d[1] / L, d[2] / L], q };
+      }
+      return null;
+    }
+    /** Caustic splats where the bands land: power conserved (bright where rays converge, dim where the fan spreads), soft knee on hot spots. */
+    _buildCaustic(paths, base, w0, discrete) {
+      const T = THEMES[this.theme], V = [];
+      const alb = T.mode ? [1, 0.966, 0.912] : [1, 1, 1];      // warm paper vs neutral dark backdrop
+      const gain = T.mode ? 0.05 : 0.035, Dk = T.mode ? 0.7 : 3; // on paper keep colour (no blow-out to white); on dark let hot spots glow
+      const H = paths.map(p => p.hit), K = H.length;
+      const sig0 = w0 / 1.84, hs0 = 0.1;                      // ribbon profile width; slit half-height
+      const info = [];
+      for (let k = 0; k < K; k++) {
+        const h = H[k]; if (!h) { info.push(null); continue; }
+        const d = h.d; let nn = cross(d, [0, 0, 1]); if (Math.hypot(...nn) < 0.15) nn = cross(d, [0, 1, 0]); nn = norm3(nn); const bn = cross(d, nn);
+        const tr = (v) => [dot3(v, nn), dot3(v, bn)];
+        const nb = (j) => { const g = H[j]; if (discrete || !g) return null; const v = [g.p[0] - h.p[0], g.p[1] - h.p[1], g.p[2] - h.p[2]]; return Math.hypot(...v) < 0.6 ? tr(v.map(x => x * 0.5)) : null; };
+        let a = k > 0 ? nb(k - 1) : null, b = k + 1 < K ? nb(k + 1) : null;
+        if (!a && b) a = [-b[0], -b[1]]; if (!b && a) b = [-a[0], -a[1]]; if (!a) { a = [0, 0]; b = [0, 0]; }
+        const travel = h.q[3] || 0;                               // distance since leaving the glass: the beam widens a little
+        const sig = sig0 * (1 + 0.35 * travel), hs = hs0 * (1 + 0.2 * travel), sv = hs * 0.35;
+        const cos = Math.abs(dot3(d, h.n));
+        const P = paths[k].rgb.map((c, i) => c * base * this._fall(h.q) * gain * alb[i] * cos);
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        info.push({ h, nn, bn, a, b, sig, hs, sv, P, dens: (LUM(P) / cos) / ((L + sig * 1.77) * 2 * hs) });
+      }
+      // soft knee: estimate each splat's total local irradiance (overlapping neighbours) and compress very hot spots
+      for (let k = 0; k < K; k++) { const I = info[k]; if (!I) continue; let D = 0;
+        for (let j = 0; j < K; j++) { const J = info[j]; if (!J) continue; const dd = Math.hypot(J.h.p[0] - I.h.p[0], J.h.p[1] - I.h.p[1], J.h.p[2] - I.h.p[2]); if (dd < I.sig * 2 + Math.hypot(I.b[0] - I.a[0], I.b[1] - I.a[1])) D += J.dens; }
+        I.knee = 1 / Math.sqrt(1 + (D / Dk) * (D / Dk)); } // local irradiance saturates softly at ≈ Dk
+      for (let k = 0; k < K; k++) { const I = info[k]; if (I) { this._splat(V, I, 1, I.knee); this._splat(V, I, 14, I.knee * 0.12); } } // core + soft halo
+      return new Float32Array(V);
+    }
+    _splat(V, I, scale, k) {
+      const { h, nn, bn, a, b } = I, sig = I.sig * scale, hs = I.hs * (scale > 1 ? 2.5 : 1), sv = I.sv * (scale > 1 ? 4 : 1);
+      // tangent basis of the surface, and transverse(beam) → surface mapping
+      const N = h.n; let t1 = cross(N, [1, 0, 0]); if (Math.hypot(...t1) < 0.2) t1 = cross(N, [0, 1, 0]); t1 = norm3(t1); const t2 = cross(N, t1);
+      const m00 = dot3(nn, t1), m01 = dot3(nn, t2), m10 = dot3(bn, t1), m11 = dot3(bn, t2), det = m00 * m11 - m01 * m10;
+      if (Math.abs(det) < 0.04) return; // grazing: the footprint would be a huge sliver with almost no light in it
+      const e = [b[0] - a[0], b[1] - a[1]], L = Math.hypot(e[0], e[1]), eh = L > 1e-6 ? [e[0] / L, e[1] / L] : [1, 0], pe = [-eh[1], eh[0]];
+      const pu = 3 * sig, pv = hs + 3 * sv;
+      const C = [[-pu, -pv], [L + pu, -pv], [L + pu, pv], [-pu, pv]].map(([u, v]) => [a[0] + eh[0] * u + pe[0] * v, a[1] + eh[1] * u + pe[1] * v]);
+      const lift = 0.0015; // keep the splat just in front of the surface
+      const W = C.map(([x, y]) => { const al = (m11 * x - m01 * y) / det, be = (-m10 * x + m00 * y) / det; return [h.p[0] + t1[0] * al + t2[0] * be + N[0] * lift, h.p[1] + t1[1] * al + t2[1] * be + N[1] * lift, h.p[2] + t1[2] * al + t2[2] * be + N[2] * lift]; });
+      const col = I.P.map(c => c * k);
+      const vtx = (i) => V.push(W[i][0], W[i][1], W[i][2], C[i][0], C[i][1], a[0], a[1], b[0], b[1], col[0], col[1], col[2], sig, hs, sv);
+      vtx(0); vtx(1); vtx(2); vtx(0); vtx(2); vtx(3);
     }
     _fall(q) { return (q[5] == null ? 1 : q[5]) / Math.pow(1 + q[3] * 0.22, 1.25); }
     _lerpPt(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t, a[4] + (b[4] - a[4]) * t, a[5] + (b[5] - a[5]) * t]; }
@@ -818,7 +1006,8 @@
         v(A0, ca, k0); v(B0, cb, k0); v(B1, cb, k1); v(A0, ca, k0); v(B1, cb, k1); v(A1, ca, k1);
       }
     }
-    _uploadBeam(arr) { const gl = this.gl; gl.bindBuffer(gl.ARRAY_BUFFER, this.beamBuf); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.DYNAMIC_DRAW); this.beamCount = arr.length / 7; }
+    _uploadBeam(arr) { const gl = this.gl; gl.bindBuffer(gl.ARRAY_BUFFER, this.beamBuf); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.DYNAMIC_DRAW); this.beamCount = arr.length / 7;
+      const c = this._causticArr || new Float32Array(0); gl.bindBuffer(gl.ARRAY_BUFFER, this.causticBuf); gl.bufferData(gl.ARRAY_BUFFER, c, gl.DYNAMIC_DRAW); this.causticCount = c.length / 15; }
     _draw(fb, w, h) { const gl = this.gl; gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, w, h); gl.bindVertexArray(this.quadVao); gl.drawArrays(gl.TRIANGLES, 0, 3); }
     _halton(i) { const h = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; }; const k = (i % 32) + 1; return [h(k, 2) - 0.5, h(k, 3) - 0.5]; }
     /** One full deterministic sample of the image into P.accum with weight 'blend'. */
@@ -839,8 +1028,13 @@
       this._draw(P.scene.fb, P.w, P.h);
       if (this.beamCount && this.lightMode === 'beam') {
         gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-        gl.useProgram(this.p.beam.p); gl.uniformMatrix4fv(this.p.beam.u.uVP, false, viewProj(null, dist, tanF, aspect, cxJ, cyJ));
+        const VPu = viewProj(null, dist, tanF, aspect, cxJ, cyJ);
+        gl.useProgram(this.p.beam.p); gl.uniformMatrix4fv(this.p.beam.u.uVP, false, VPu);
         gl.bindVertexArray(this.beamVao); gl.drawArrays(gl.TRIANGLES, 0, this.beamCount);
+        if (this.causticCount) { // light landing on the wall/floor, drawn into the scene so the glass refracts it
+          gl.useProgram(this.p.caustic.p); gl.uniformMatrix4fv(this.p.caustic.u.uVP, false, VPu);
+          gl.bindVertexArray(this.causticVao); gl.drawArrays(gl.TRIANGLES, 0, this.causticCount);
+        }
         gl.disable(gl.BLEND);
       }
       // 2. glass / chrome over the scene, blended into the accumulation
@@ -889,7 +1083,7 @@
         const tanF = Math.tan(15 * DEG) * cam.k;
         const VPw = viewProj(null, 4.6, tanF, w / h, cam.cx, cam.cy);
         if (flip) { for (let i = 1; i < 16; i += 4) VPw[i] = -VPw[i]; }
-        gl.uniformMatrix4fv(d.u.uVPw, false, VPw); gl.uniform1f(d.u.uFlipY, flip ? 1 : 0); gl.uniform1f(d.u.uTime, time); gl.uniform1f(d.u.uPx, Math.max(1, h / 900) * 1.6);
+        gl.uniformMatrix4fv(d.u.uVPw, false, VPw); gl.uniform1f(d.u.uFlipY, flip ? 1 : 0); gl.uniform1f(d.u.uTime, time); gl.uniform1f(d.u.uPx, Math.max(1, h / 900) * 1.6); gl.uniform3fv(d.u.uTint, this._src.color);
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, P.bloom[Math.min(2, P.bloom.length - 1)].tex); gl.uniform1i(d.u.uGlow, 0);
         gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, w, h);
         gl.bindVertexArray(this.dustVao); gl.drawArrays(gl.POINTS, 0, this.dustN); gl.disable(gl.BLEND);
@@ -907,7 +1101,7 @@
       } else if (this.time - this.lastPointerT > 3.5 && !this.paused) {
         // idle: slow seamless drift of the light (6 s period)
         // idle: glide to a calm resting pose and stop, so the image settles into a crisp still
-        this.target.ang = Math.PI + 0.2; this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
+        this.target.ang = this._restAng; this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
       }
       // critically damped follow (angles wrap)
       const k = 1 - Math.exp(-dt * 2.6); // slow, critically damped follow: elegant, no jitter
@@ -1018,6 +1212,8 @@
   }
   SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
   SpectraEngine.version = 2;
+  /** Light sources for UI swatches: [{ id, label, kind: 'cont'|'lines', bands: [{ lam, rgb }] }] (rgb linear, unnormalised). */
+  SpectraEngine.lightSources = Object.keys(SOURCES).map(id => ({ id, label: SOURCES[id].label, kind: SOURCES[id].kind, color: SOURCES[id].color.slice(), bands: SOURCES[id].bands.map(b => ({ lam: b.lam, rgb: b.rgb.slice() })) }));
   SpectraEngine._toneMap = toneMapJS; SpectraEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
   window.SpectraEngine = SpectraEngine;
 })();
