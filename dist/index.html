@@ -2732,16 +2732,23 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
       for (let k = 0; k < waves; k++) {
         const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
-        const same = !lines && !!B && A.length === B.length; // emission lines: separate ribbons, no sheet between them
-        const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
+        const rq = B ? this._routeQ(A, B) : 0, same = !lines && rq > 0; // emission lines: separate ribbons, no sheet between them
+        const nb = same ? B : (Bp && this._routeQ(A, Bp) > 0 ? Bp : null);
         const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : 0;
         for (let i = 0; i + 1 < A.length; i++) {
           const n = nRef(i, A);
           this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror || lines ? 0 : 1, n);
-          if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base, w0, n);
+          if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base * rq, w0, n);
         }
       }
       return new Float32Array(V);
+    }
+    /** How surely two neighbouring bands took the same route through the glass (1 = same, 0 = different): same vertex count and
+     *  glass hit points that stay together (same-route neighbours sit < 0.005 apart; different faces are far apart). Smooth, no popping. */
+    _routeQ(A, B) {
+      if (A.length !== B.length) return 0; let m = 0;
+      for (let j = 1; j + 1 < A.length; j++) m = Math.max(m, Math.hypot(A[j][0] - B[j][0], A[j][1] - B[j][1], A[j][2] - B[j][2]));
+      return 1 - smooth01((m - 0.03) / 0.04);
     }
     /** An incoming beam that starts outside the room (below the floor): move its start (in place) to where it enters the room, so it is
      *  never drawn inside a surface. Returns that point as a landing ({ p, n, d, q }) or null when the beam starts in the room. */
@@ -3056,16 +3063,33 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         await enc.flush(); if (err) throw err; muxer.finalize(); return new Blob([target.buffer], { type: 'video/mp4' });
       } finally { if (enc) { try { enc.close(); } catch (e) { /* closed */ } } if (P) this._free(P); this.busy = false; this._dirty = true; }
     }
+    /** The beam's line through the logo for every frame of a seamless loop, temporally coherent: one line for the whole loop when
+     *  some line splits the light coherently in every frame (preferring the live one), else the live behaviour replayed
+     *  periodically: hysteresis against the previous frame and the 1.4/s glide, run twice round the loop so it wraps seamlessly. */
+    _loopRoute(frames, fps, poseAt) {
+      if (!this.beam.ok || this.material === 'chrome') return new Array(frames).fill(0.06);
+      const S = []; for (let f = 0; f < frames; f++) { const p = poseAt(f); S.push(this._routeScan(p.ang, rotYX(p.yaw, p.pitch))); }
+      const n = S[0].offs.length; let bi = -1, bm = -1, li = -1, lm = -1;
+      const cur = this._bestOff != null ? Math.round((this._bestOff - S[0].offs[0]) / (S[0].ext * 0.05)) : -1;
+      for (let i = 0; i < n; i++) { let mn = Infinity, sum = 0; for (const s of S) { mn = Math.min(mn, s.scores[i]); sum += s.scores[i]; }
+        if (mn <= 0.002) continue; const mean = sum / frames; if (mean > bm) { bm = mean; bi = i; } if (i === cur) { li = i; lm = mean; } }
+      if (li >= 0 && lm >= bm - 0.02) bi = li;
+      if (bi >= 0) return new Array(frames).fill(S[0].offs[bi]);
+      const tgt = new Array(frames), out = new Array(frames), k = 1 - Math.exp(-1.4 / fps); let c = this._bestOff, x = null;
+      for (let pass = 0; pass < 2; pass++) for (let f = 0; f < frames; f++) { c = this._pickRoute(S[f], c); tgt[f] = c; }
+      for (let pass = 0; pass < 2; pass++) for (let f = 0; f < frames; f++) { x = x == null ? tgt[f] : x + (tgt[f] - x) * k; out[f] = x; }
+      return out;
+    }
     /** Seamless loop: the light sweeps across the logo and back over `seconds`. Any width×height (aspect = width/height). */
     async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
       const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2;
       const frames = Math.round(fps * seconds), cam = this._offlineCam(w, h), base = this._pose(), keepOff = this.aimOff;
+      const poseAt = (f) => { const ph = 2 * Math.PI * f / fps / seconds; return { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) }; };
+      const offs = this._loopRoute(frames, fps, poseAt);
       try {
         return await this._encodeFrames({ w, h, fps, frames, onProgress, render: (P, f) => {
-          const t = f / fps, ph = 2 * Math.PI * t / seconds;
-          const pose = { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) };
-          this.aimOff = this._bestOffset(pose.ang, rotYX(pose.yaw, pose.pitch));
-          return this._offlineFrame(P, pose, cam, spp, t * (12 / seconds), false);
+          this.aimOff = offs[f];
+          return this._offlineFrame(P, poseAt(f), cam, spp, f / fps * (12 / seconds), false);
         } });
       } finally { this.aimOff = keepOff; }
     }
