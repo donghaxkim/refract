@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;spectra-logo&gt; — embed demo</title>
+<script src="spectra-logo.js"></script>
+<style>
+  :root{--ink:#e9e9ec;--mute:#8b8d93;--line:rgba(255,255,255,.1);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color-scheme:dark}
+  *{box-sizing:border-box} body{margin:0;background:#0b0b0c;color:var(--ink)}
+  section{padding:72px 24px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:clamp(28px,4vw,44px);letter-spacing:-.02em;margin:0 0 8px} h2{font-size:22px;letter-spacing:-.01em;margin:0 0 6px}
+  p{margin:0 0 18px;color:var(--mute);max-width:62ch}
+  pre{margin:16px 0 0;padding:14px 16px;border-radius:10px;background:rgba(127,127,127,.1);border:1px solid var(--line);overflow:auto;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:inherit}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+  .hero spectra-logo{border-radius:18px;height:min(62vh,560px);aspect-ratio:auto}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .controls button,.controls input{font:inherit;font-size:13px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:inherit}
+  .controls button[aria-pressed="true"]{background:rgba(255,255,255,.16)}
+  .light{background:#f3f1ed;color:#1b1b1d;--mute:#5d5f66;--line:rgba(0,0,0,.1);color-scheme:light}
+  .light spectra-logo{border-radius:0;height:440px;aspect-ratio:auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;align-items:start}
+  .card{background:#16171a;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .card .body{padding:16px 18px 18px} .card h3{margin:0 0 4px;font-size:16px} .card p{margin:0;font-size:13.5px}
+  .card spectra-logo{aspect-ratio:4/3}
+  .pattern{position:relative;border-radius:16px;overflow:hidden;background:
+    radial-gradient(circle at 20% 30%,#ff6a3d55,transparent 40%),radial-gradient(circle at 80% 70%,#3d7bff55,transparent 45%),
+    repeating-linear-gradient(45deg,#1b1c20 0 14px,#222328 14px 28px)}
+  .pattern spectra-logo{aspect-ratio:4/3}
+  .slate{background:#3b4658;border-radius:16px;overflow:hidden}
+  .slate spectra-logo{aspect-ratio:4/3}
+  .tall{height:120vh;display:grid;place-items:center;color:var(--mute)}
+</style>
+</head>
+<body>
+
+<section class="hero"><div class="wrap">
+  <h1>&lt;spectra-logo&gt;</h1>
+  <p>A drop-in WebGL2 render of a logo as spectral glass or chrome. Hover to steer the light, drag to spin. One script, no dependencies.</p>
+  <spectra-logo id="hero" sample="spark" background="#0b0b0c" alt="Spark mark in glass"></spectra-logo>
+  <div class="controls" id="hero-controls">
+    <button data-m="glass" aria-pressed="true">Glass</button><button data-m="chrome" aria-pressed="false">Chrome</button>
+    <button data-l="beam" aria-pressed="true">Beam</button><button data-l="studio" aria-pressed="false">Studio</button>
+    <input id="word" placeholder="Type a word + Enter" maxlength="16">
+  </div>
+<pre><code>&lt;script src="spectra-logo.js"&gt;&lt;/script&gt;
+&lt;spectra-logo sample="spark" background="#0b0b0c" style="height:560px"&gt;&lt;/spectra-logo&gt;</code></pre>
+</div></section>
+
+<section class="light"><div class="wrap">
+  <h2>On a light page</h2>
+  <p>Set <code>background</code> to the page colour: Spectra draws it as its own backdrop (so the glass still has something to refract) and matches it at the edges, so the render melts into the page. Light colours pick the light theme automatically.</p>
+  <spectra-logo id="light" sample="links" background="#f3f1ed" material="glass" alt="Links mark in glass"></spectra-logo>
+<pre><code>&lt;spectra-logo sample="links" background="#f3f1ed"&gt;&lt;/spectra-logo&gt;</code></pre>
+</div></section>
+
+<section><div class="wrap grid">
+  <div>
+    <div class="card">
+      <spectra-logo id="card" sample="gem" material="chrome" light="studio" background="#16171a" thickness="60" roundness="40" alt="Gem mark in chrome"></spectra-logo>
+      <div class="body"><h3>Card</h3><p>Chrome, studio light, matched to the card colour.</p></div>
+    </div>
+<pre><code>&lt;spectra-logo sample="gem" material="chrome" light="studio"
+  background="#16171a" thickness="60" roundness="40"&gt;&lt;/spectra-logo&gt;</code></pre>
+  </div>
+  <div>
+    <div class="pattern"><spectra-logo id="transparent" sample="ribbon" transparent alt="Ribbon mark"></spectra-logo></div>
+    <p style="margin-top:10px">Transparent: true alpha over any page. Flatter, because the glass can't refract the page behind it.</p>
+<pre><code>&lt;spectra-logo sample="ribbon" transparent&gt;&lt;/spectra-logo&gt;</code></pre>
+  </div>
+  <div>
+    <div class="slate"><spectra-logo id="static" text="Prism" interactive="false" background="#3b4658" alt="The word Prism in glass"></spectra-logo></div>
+    <p style="margin-top:10px">Non-interactive: idle animation only, never captures the pointer or blocks scrolling.</p>
+<pre><code>&lt;spectra-logo text="Prism" interactive="false"
+  background="#3b4658"&gt;&lt;/spectra-logo&gt;</code></pre>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>React</h2>
+<pre><code>import { SpectraLogo } from './spectra-logo-react.js';
+
+&lt;SpectraLogo sample="spark" material="glass" background="#0b0b0c"
+  style={{ height: 480 }} onReady={() =&gt; console.log('ready')} /&gt;</code></pre>
+  <h2 style="margin-top:36px">Attributes</h2>
+<pre><code>src="logo.svg|logo.png"  text="Word"  sample="spark|links|loop|ribbon|mono|gem"  font="CSS font-family (text only)"
+material="glass|chrome"  light="beam|studio"  theme="dark|light" (default: from background)
+background="&lt;css colour&gt;"  transparent  thickness="0-100"  roundness="0-100"
+interactive="false"  poster="fallback.jpg"  alt="accessible label"
+events: ready, error (detail.phase: webgl | source | context | render)</code></pre>
+</div></section>
+<div class="tall">(spacer — scroll back up)</div>
+
+<script>
+  const hero = document.getElementById('hero');
+  document.getElementById('hero-controls').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.m) { hero.material = b.dataset.m; document.querySelectorAll('[data-m]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }
+    if (b.dataset.l) { hero.light = b.dataset.l; document.querySelectorAll('[data-l]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); }
+  });
+  document.getElementById('word').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) hero.text = v; else hero.removeAttribute('text'); } });
+  document.addEventListener('error', (e) => { if (e.target.localName === 'spectra-logo') console.warn('spectra-logo error', e.target.id, e.detail.phase, e.detail.message); });
+</script>
+</body>
+</html>

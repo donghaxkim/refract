@@ -3,6 +3,10 @@
   "version": "2.4.0",
   "private": true,
   "description": "Turn any logo into spectral glass or chrome: a light beam refracts through your logo and splits into a rainbow. WebGL2, zero dependencies.",
-  "scripts": { "build": "node build.mjs" },
+  "scripts": {
+    "build": "node build.mjs && node build-embed.mjs",
+    "build:app": "node build.mjs",
+    "build:embed": "node build-embed.mjs"
+  },
   "license": "MIT"
 }

@@ -22,7 +22,7 @@
     const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Spectra UI] engine.' + name, e); } };
 
     let material = 'glass', uiHidden = false, paused = false;
-    let buildToken = 0, activeSample = null, exporting = null;
+    let buildToken = 0, activeSample = null, exporting = null, logoName = '';
 
     /* ───── toast ───── */
     const toastEl = $('#sp-toast'); let toastT = 0;
@@ -165,7 +165,7 @@
     function loadSample(i, quiet) {
       const s = samples[i]; if (!s) return;
       const sid = s.id || String(i); activeSample = sid; markSample(sid, true);
-      return buildField({ type: 'svg', text: s.svg }, { sid, done: quiet ? null : s.name });
+      return buildField({ type: 'svg', text: s.svg }, { sid, done: quiet ? null : s.name, name: s.name || sid });
     }
     async function buildField(source, opts) {
       opts = opts || {};
@@ -178,6 +178,7 @@
         if (token !== buildToken) return;
         call('setField', field);
         markSample(opts.sid || null, false);
+        logoName = opts.name || '';
         if (opts.done) toast(opts.done);
       } catch (e) {
         console.error('[Spectra UI] build failed', e);
@@ -200,9 +201,9 @@
         let text = '';
         try { text = await file.text(); } catch (e) { toast('Couldn’t open ' + short, 'err'); return; }
         if (!/<svg[\s>]/i.test(text)) { toast(short + ' isn’t a valid SVG', 'err', 3200); return; }
-        return buildField({ type: 'svg', text }, { done: 'Using ' + short });
+        return buildField({ type: 'svg', text }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
       }
-      return buildField({ type: 'image', blob: file }, { done: 'Using ' + short });
+      return buildField({ type: 'image', blob: file }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
     }
     const fileIn = $('#sp-file');
     $('#sp-pick').addEventListener('click', () => fileIn.click());
@@ -212,7 +213,7 @@
       e.preventDefault();
       const w = wordIn.value.trim(); if (!w) return;
       activeSample = null; markSample(null);
-      buildField({ type: 'text', text: w, fontFamily: '"Instrument Sans", Inter, system-ui, sans-serif', fontWeight: 700 }, { done: 'Using “' + w + '”' });
+      buildField({ type: 'text', text: w, fontFamily: '"Instrument Sans", Inter, system-ui, sans-serif', fontWeight: 700 }, { done: 'Using “' + w + '”', name: w });
       wordIn.blur(); close();
     });
 
@@ -255,6 +256,9 @@
     /* ───── export ───── */
     const xpPng = $('#sp-xp-png'), xpMp4 = $('#sp-xp-mp4'), mp4Wrap = $('#sp-xp-mp4-wrap');
     const prog = $('#sp-prog'), progFill = $('#sp-prog-fill'), progPct = $('#sp-prog-pct'), progLabel = $('#sp-prog-label');
+    const xp3d = $('#sp-xp-3d'), xpGlb = $('#sp-xp-glb'), xpStl = $('#sp-xp-stl');
+    const Mesh = deps.SpectraMesh || global.SpectraMesh || null;
+    let meshAbort = null;
     const canVideo = () => { try { return !!Engine.canRenderVideo; } catch (e) { return false; } };
     function viewSize() { return [Math.max(1, canvas.clientWidth || window.innerWidth), Math.max(1, canvas.clientHeight || window.innerHeight)]; }
     function pngSize() { const v = viewSize(); let W = v[0] * 2, H = v[1] * 2; const m = Math.max(W, H); if (m > 8192) { W *= 8192 / m; H *= 8192 / m; } return [Math.round(W), Math.round(H)]; }
@@ -266,6 +270,9 @@
       $('#sp-xp-mp4-s').textContent = v[0] + '×' + v[1] + ', 6s';
       mp4Wrap.hidden = !canVideo();
       xpPng.disabled = !!exporting; xpMp4.disabled = !!exporting;
+      xp3d.hidden = !Mesh;
+      const noShape = !(engine && engine.beam && engine.beam.ok);
+      xpGlb.disabled = !!exporting || noShape; xpStl.disabled = !!exporting || noShape;
     }
     function setProg(f, label) {
       f = clamp(f || 0, 0, 1);
@@ -306,7 +313,30 @@
         exporting = null; prog.hidden = true; xpMp4.hidden = false; refreshExport();
       }
     });
-    $('#sp-cancel').addEventListener('click', () => { call('cancelRender'); });
+    /* 3D model: GLB (glTF 2.0, metres, Y-up) / STL (mm, Z-up, flat on the plate). Meshing runs in a worker. */
+    function slug(s) { return String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'logo'; }
+    async function exportMesh(format, btn, wrap, high) {
+      if (exporting || !Mesh) return;
+      exporting = format; refreshExport();
+      const home = prog.parentNode, label = format === 'glb' ? 'Building GLB' : 'Building STL';
+      wrap.appendChild(prog); btn.hidden = true; prog.hidden = false; setProg(0, high ? label + ' · fine' : label);
+      $('#sp-cancel').focus();
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null; meshAbort = ctl;
+      try {
+        const r = await Mesh.export(engine, format, { quality: high ? 'high' : 'standard', name: logoName || 'Spectra logo', material, signal: ctl && ctl.signal, onProgress: (f) => setProg(f * 0.96) });
+        setProg(1, 'Saving');
+        const blob = new Blob([r.bytes], { type: r.mime });
+        await saveBlob(blob, 'spectra-' + slug(logoName) + '-' + stamp() + '.' + r.ext);
+        close();
+      } catch (e) {
+        if (isAbort(e)) toast('Export cancelled'); else { console.error('[Spectra UI] mesh export', e); toast(format.toUpperCase() + ' export failed', 'err'); }
+      } finally {
+        meshAbort = null; exporting = null; prog.hidden = true; btn.hidden = false; home.appendChild(prog); refreshExport();
+      }
+    }
+    xpGlb.addEventListener('click', (e) => exportMesh('glb', xpGlb, $('#sp-xp-glb-wrap'), e.shiftKey));
+    xpStl.addEventListener('click', (e) => exportMesh('stl', xpStl, $('#sp-xp-stl-wrap'), e.shiftKey));
+    $('#sp-cancel').addEventListener('click', () => { if (meshAbort) meshAbort.abort(); else call('cancelRender'); });
 
     /* ───── pointer → engine ───── */
     let hinted = false, drag = null;

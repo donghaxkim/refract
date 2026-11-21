@@ -55,13 +55,16 @@
   precision highp float; in vec2 vUv; out vec4 o;
   uniform vec3 uBg; uniform vec2 uRes, uCenter, uJitter; uniform int uMode;
   uniform sampler2D uField; uniform mat3 uRotT; uniform float uCamDist, uTanFov, uShadow, uEnvYaw;
+  uniform float uFlat; // embed: custom page colour; 1 = backdrop exactly uBg at the frame edge (no blue lift, no grain)
   float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
   float vn(vec2 x){ vec2 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f);
     return mix(mix(h12(i),h12(i+vec2(1,0)),f.x), mix(h12(i+vec2(0,1)),h12(i+vec2(1,1)),f.x), f.y); }
   void main(){
     vec2 ndc = (gl_FragCoord.xy + uJitter)/uRes*2.0 - 1.0 - uCenter;
     if (uMode == 0){ vec2 q = ndc; q.x *= uRes.x/uRes.y; float g = exp(-dot(q,q)*0.7); float n = (vn(gl_FragCoord.xy*0.35) - 0.5)*0.05 + (h12(gl_FragCoord.xy) - 0.5)*0.03;
-      o = vec4(uBg*(0.95 + 0.6*g + n) + vec3(0.0006,0.0007,0.0011)*(1.0-g), 1.0); return; }
+      vec3 c0 = uBg*(0.95 + 0.6*g + n) + vec3(0.0006,0.0007,0.0011)*(1.0-g);
+      if (uFlat > 0.0){ vec2 e = 1.0 - abs(ndc + uCenter); float ef = smoothstep(0.0, 0.55, min(e.x, e.y*1.4)); c0 = mix(c0, uBg*(1.0 + (0.55*g + n*0.6)*ef), uFlat); }
+      o = vec4(c0, 1.0); return; }
     // light: a paper wall 1.3 units behind the logo, lit by a soft window from the upper left
     vec3 rd = normalize(vec3(ndc.x*(uRes.x/uRes.y)*uTanFov, ndc.y*uTanFov, -1.0));
     float t = (uCamDist + 1.3)/(-rd.z); vec3 W = vec3(0.0,0.0,uCamDist) + rd*t;
@@ -81,6 +84,8 @@
     sh *= uShadow > 1.2 ? 0.55 : (0.42 - 0.22*smoothstep(-0.03, -0.14, d)); // glass: lighter core, darker rim
     lit *= 1.0 - sh;
     float paper = (vn(gl_FragCoord.xy*0.35) - 0.5)*0.025 + (h12(gl_FragCoord.xy) - 0.5)*0.012;
+    if (uFlat > 0.0){ vec2 e = 1.0 - abs(ndc + uCenter); float ef = smoothstep(0.0, 0.5, min(e.x, e.y*1.4));
+      float base = mix(1.0, min(lit/max(1.0 - sh, 1e-3)/1.0, 1.0), ef); lit = mix(lit, base*(1.0 - sh*ef), uFlat); paper *= mix(1.0, 0.0, uFlat); }
     o = vec4(uBg*(lit + paper), 1.0);
   }`;
 
@@ -293,6 +298,7 @@
   const COMPOSITE = `#version 300 es
   precision highp float; in vec2 vUv; out vec4 o;
   uniform sampler2D uAccum, uBloom; uniform float uExposure, uBloomAmt, uVignette, uFlip, uTransparent; uniform vec2 uOutRes; uniform int uHasBloom, uTone;
+  uniform float uUseGain; uniform vec3 uGain; // embed: custom background colour match
   vec3 neutral(vec3 c){ // Khronos PBR Neutral: keeps hues and whites honest for the light theme
     float x = min(c.r, min(c.g, c.b)); float off = x < 0.08 ? x - 6.25*x*x : 0.04; c -= off;
     float peak = max(c.r, max(c.g, c.b)); const float sc = 0.76; if (peak < sc) return c;
@@ -312,6 +318,7 @@
     vec3 bl = uHasBloom == 1 ? texture(uBloom, uv).rgb : vec3(0.0);
     vec3 hdr = (max(a.rgb,0.0) + bl*uBloomAmt)*uExposure;
     vec3 c = uTone == 1 ? toSrgb(neutral(hdr)) : toSrgb(agxEotf(look(agx(hdr))));
+    if (uUseGain > 0.0) c = min(c*uGain, vec3(1.0));
     vec2 q = (uv-0.5)*vec2(uOutRes.x/uOutRes.y,1.0);
     c *= 1.0 - uVignette*smoothstep(0.3, 1.1, length(q)*1.1);
     c += (h12(gl_FragCoord.xy) - 0.5)/255.0;
@@ -477,6 +484,43 @@
   const add3 = (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
   function refract3(v, n, eta) { const c = -dot3(v, n); const k = 1 - eta * eta * (1 - c * c); if (k < 0) return null; const s = eta * c - Math.sqrt(k); return [eta * v[0] + s * n[0], eta * v[1] + s * n[1], eta * v[2] + s * n[2]]; }
 
+  // ───────────────────────────────────────── embed helpers: CSS colour → sRGB, tone curves (exact JS copies of COMPOSITE), inverse
+  let _cc = null;
+  function parseCssColor(str) {
+    if (!_cc) { const c = document.createElement('canvas'); c.width = c.height = 1; _cc = c.getContext('2d', { willReadFrequently: true }); }
+    _cc.clearRect(0, 0, 1, 1); _cc.fillStyle = '#000'; _cc.fillStyle = String(str); _cc.fillRect(0, 0, 1, 1);
+    const d = _cc.getImageData(0, 0, 1, 1).data; const a = d[3] / 255 || 1;
+    return [d[0] / 255 / a, d[1] / 255 / a, d[2] / 255 / a].map(v => clamp(v, 0, 1));
+  }
+  const mcm = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]]; // GLSL column-major mat3 * v
+  const AGX_M = [0.842479062253094, 0.0423282422610123, 0.0423756549057051, 0.0784335999999992, 0.878468636469772, 0.0784336, 0.0792237451477643, 0.0791661274605434, 0.879142973793104];
+  const AGX_MI = [1.19687900512017, -0.0528968517574562, -0.0529716355144438, -0.0980208811401368, 1.15190312990417, -0.0980434501171241, -0.0990297440797205, -0.0989611768448433, 1.15107367264116];
+  function toneMapJS(c, tone) {
+    let v;
+    if (tone === 1) {
+      v = c.slice(); const x = Math.min(v[0], v[1], v[2]); const off = x < 0.08 ? x - 6.25 * x * x : 0.04; v = v.map(a => a - off);
+      const peak = Math.max(v[0], v[1], v[2]); const sc = 0.76;
+      if (peak >= sc) { const d = 1 - sc, np = 1 - d * d / (peak + d - sc); v = v.map(a => a * np / peak); const g = 1 - 1 / (0.15 * (peak - np) + 1); v = v.map(a => a + (np - a) * g); }
+    } else {
+      const lo = -12.47393, hi = 4.026069;
+      v = mcm(AGX_M, c).map(a => (clamp(Math.log2(Math.max(a, 1e-10)), lo, hi) - lo) / (hi - lo));
+      v = v.map(x => { const x2 = x * x, x4 = x2 * x2; return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232; });
+      let l = 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; v = v.map(a => Math.pow(Math.max(a, 0), 1.3)); l = Math.pow(Math.max(l, 0), 1.3); v = v.map(a => l + 1.45 * (a - l));
+      v = mcm(AGX_MI, v).map(a => Math.pow(Math.max(a, 0), 2.2));
+    }
+    return v.map(a => { a = clamp(a, 0, 1); return a <= 0.0031308 ? a * 12.92 : 1.055 * Math.pow(a, 1 / 2.4) - 0.055; });
+  }
+  const srgbLin = (v) => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  /** Linear backdrop value whose tone-mapped output (at exposure ex) equals the sRGB target. */
+  function solveBackdrop(tgt, ex, tone) {
+    const tl = tgt.map(srgbLin); let x = tl.map(v => Math.max(v, 1e-5) / ex);
+    for (let i = 0; i < 80; i++) {
+      const y = toneMapJS(x.map(v => v * ex), tone).map(srgbLin);
+      x = x.map((v, k) => clamp(v * Math.pow(Math.max(tl[k], 1e-6) / Math.max(y[k], 1e-6), 0.6), 0, 64));
+    }
+    return tgt.map((v, k) => v <= 0.0005 ? 0 : x[k]);
+  }
+
   // ───────────────────────────────────────── engine
   class SpectraEngine {
     constructor(canvas) {
@@ -584,6 +628,53 @@
       this._resizeMain();
     }
     dispose() { cancelAnimationFrame(this._raf); this._disposed = true; }
+    // ── embed API (additive): page-colour backdrop, transparent output, suspend/resume, settle, destroy
+    /** Draw this CSS colour (or [r,g,b] 0..1 sRGB) as the backdrop, matched through the theme's tone curve; null = theme default. */
+    setBackground(c) {
+      this._bgSrgb = c == null || c === '' ? null : (Array.isArray(c) ? c.slice(0, 3) : parseCssColor(c));
+      this._syncBg(); this._dirty = true;
+    }
+    getBackground() { return this._bgSrgb ? this._bgSrgb.slice() : null; }
+    /** True alpha output: black backdrop, alpha from coverage/light. Flatter: the glass can't refract the page behind the canvas. */
+    setTransparent(v) { v = !!v; if (v === !!this.transparent) return; this.transparent = v; this._syncBg(); this._dirty = true; }
+    _syncBg() {
+      const gl = this.gl, u = this.p.glass.u, T = THEMES[this.theme];
+      this._bgLin = null; this._bgGain = null; this._bloomTh = 0;
+      if (this.transparent) { this._bgLin = [0, 0, 0]; }
+      else if (this._bgSrgb) {
+        const L = LOOKS[this.material], ex = L.exposure * T.exposure * (T.mode ? 1 / L.exposure : 1);
+        const tgt = this._bgSrgb.map(v => clamp(v, 0, 1));
+        // light theme: keep the wall at the theme's natural level (Neutral's linear range, where the glass and beam read) and lift the
+        // display to the page colour with a small gain; dark/mid colours are solved directly
+        const k = T.mode ? Math.min(1, 0.84 / Math.max(tgt[0], tgt[1], tgt[2], 1e-3)) : 1;
+        const lin = solveBackdrop(tgt.map(v => Math.min(v * k, 0.94)), ex, T.tone);
+        const got = toneMapJS(lin.map(v => v * ex), T.tone);
+        this._bgLin = lin; this._bgGain = tgt.map((v, i) => got[i] > 1e-4 ? clamp(v / got[i], 0.5, 1.3) : 1);
+        const mx = Math.max(lin[0], lin[1], lin[2]); this._bloomTh = Math.max(0.75, mx * 1.3 / 0.3);
+      }
+      gl.useProgram(this.p.glass.p);
+      const base = T.mode ? 0.95 : 0.0, mx = this._bgLin ? Math.max(this._bgLin[0], this._bgLin[1], this._bgLin[2]) : 0;
+      gl.uniform1f(u.uSceneFloor, this._bgLin && !this.transparent ? Math.max(base, mx * 1.25) : base);
+    }
+    /** Stop the render loop entirely (no rAF, no CPU beam tracing). The last frame stays on the canvas. */
+    suspend() { if (this._suspended) return; this._suspended = true; cancelAnimationFrame(this._raf); }
+    resume() { if (this._disposed || !this._suspended) return; this._suspended = false; this._lastT = performance.now(); this._raf = requestAnimationFrame(this._loop.bind(this)); }
+    isSuspended() { return !!this._suspended; }
+    /** Jump the light/pose straight to the idle resting pose (reduced motion): the next ~24 frames only refine AA. */
+    settle() {
+      this.pointer = null; this.lastPointerT = -1e9; this.rot.vy = 0; this.rot.vp = 0;
+      const wasPaused = this.paused; this.paused = false; this._updateTargets(0); this.paused = wasPaused;
+      this.aim.ang = this.target.ang; this.aim.yaw = this.target.yaw; this.aim.pitch = this.target.pitch; this.envYaw = this.envYawT;
+      if (this.field) { const p = this._pose(); this._bestOff = this._bestOffset(p.ang, rotYX(p.yaw, p.pitch)); this.aimOff = this._bestOff; }
+      this._bestAng = null; this._dirty = true;
+    }
+    /** True once the image is still and fully antialiased. */
+    isSettled() { return !!this.field && !this._dirty && this.samples >= 24; }
+    /** Release everything: stop the loop and drop the WebGL context. */
+    destroy() {
+      this.dispose(); clearTimeout(this._rt); this.listeners = {};
+      try { const ext = this.gl.getExtension('WEBGL_lose_context'); if (ext && !this.gl.isContextLost()) ext.loseContext(); } catch (e) { /* already gone */ }
+    }
 
     // ── internals
     _tp(f) { const gl = this.gl; gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, f); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); }
@@ -636,6 +727,7 @@
         const r = (l.rot || 0) * DEG, cr = Math.cos(r), sr = Math.sin(r);
         return { d, t: [t[0] * cr + b[0] * sr, t[1] * cr + b[1] * sr, t[2] * cr + b[2] * sr], b: [-t[0] * sr + b[0] * cr, -t[1] * sr + b[1] * cr, -t[2] * sr + b[2] * cr], hs: [l.w * 0.5 * DEG, l.h * 0.5 * DEG], c: l.col.map(v => v * l.i * (this.lightMode === 'studio' ? 1.5 : 1) * (this.material === 'chrome' ? 1 : THEMES[this.theme].lightK)), k: l.kind };
       });
+      if (this._bgSrgb !== undefined || this.transparent) this._syncBg();
     }
     _insetCam(W, H) { // CSS-size based framing: centre in free area, fit width on portrait screens
       const r = Math.min(this.ins.r, W * 0.6), b = Math.min(this.ins.b, H * 0.6);
@@ -739,7 +831,7 @@
       // 1. scene: background + beam
       gl.disable(gl.BLEND);
       const T = THEMES[this.theme], bu = this.p.bg.u;
-      gl.useProgram(this.p.bg.p); gl.uniform3fv(bu.uBg, T.bg || LOOKS[this.material].bg); gl.uniform2f(bu.uRes, P.w, P.h); gl.uniform2f(bu.uCenter, cam.cx, cam.cy);
+      gl.useProgram(this.p.bg.p); gl.uniform3fv(bu.uBg, this._bgLin || T.bg || LOOKS[this.material].bg); gl.uniform1f(bu.uFlat, this._bgLin ? 1 : 0); gl.uniform2f(bu.uRes, P.w, P.h); gl.uniform2f(bu.uCenter, cam.cx, cam.cy);
       gl.uniform1i(bu.uMode, T.mode); gl.uniform2f(bu.uJitter, j[0], j[1]); gl.uniform1f(bu.uCamDist, dist); gl.uniform1f(bu.uTanFov, tanF); gl.uniform1f(bu.uEnvYaw, this.envYaw);
       gl.uniform1f(bu.uShadow, this.field ? (this.material === 'chrome' ? 1.4 : 1.0) : 0.0);
       gl.uniformMatrix3fv(bu.uRotT, false, new Float32Array([R[0][0], R[0][1], R[0][2], R[1][0], R[1][1], R[1][2], R[2][0], R[2][1], R[2][2]]));
@@ -775,7 +867,7 @@
       const gl = this.gl, p = this.p; if (!P.bloom.length) return false;
       gl.disable(gl.BLEND);
       gl.useProgram(p.pre.p); gl.activeTexture(gl.TEXTURE0); gl.uniform1i(p.pre.u.uSrc, 0); gl.bindTexture(gl.TEXTURE_2D, P.accum[P.cur].tex);
-      gl.uniform2f(p.pre.u.uTexel, 1 / P.w, 1 / P.h); gl.uniform1f(p.pre.u.uThreshold, 0.75); this._draw(P.bloom[0].fb, P.bloom[0].w, P.bloom[0].h);
+      gl.uniform2f(p.pre.u.uTexel, 1 / P.w, 1 / P.h); gl.uniform1f(p.pre.u.uThreshold, this._bloomTh || 0.75); this._draw(P.bloom[0].fb, P.bloom[0].w, P.bloom[0].h);
       gl.useProgram(p.down.p); gl.uniform1i(p.down.u.uSrc, 0);
       for (let i = 1; i < P.bloom.length; i++) { const s = P.bloom[i - 1], d = P.bloom[i]; gl.bindTexture(gl.TEXTURE_2D, s.tex); gl.uniform2f(p.down.u.uTexel, 1 / s.w, 1 / s.h); this._draw(d.fb, d.w, d.h); }
       gl.useProgram(p.up.p); gl.uniform1i(p.up.u.uSrc, 0); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -789,7 +881,7 @@
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, P.accum[P.cur].tex); gl.uniform1i(u.uAccum, 0);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, hb ? P.bloom[0].tex : P.accum[P.cur].tex); gl.uniform1i(u.uBloom, 1);
       const T = THEMES[this.theme]; gl.uniform1i(u.uHasBloom, hb ? 1 : 0); gl.uniform1f(u.uExposure, L.exposure * T.exposure * (T.mode ? 1 / L.exposure : 1)); gl.uniform1f(u.uBloomAmt, L.bloom * T.bloomK); gl.uniform1i(u.uTone, T.tone);
-      gl.uniform1f(u.uVignette, transparent ? 0 : L.vignette * T.vignetteK); gl.uniform1f(u.uFlip, flip ? 1 : 0); gl.uniform2f(u.uOutRes, w, h); gl.uniform1f(u.uTransparent, transparent ? 1 : 0);
+      gl.uniform1f(u.uVignette, (transparent || this._bgLin) ? 0 : L.vignette * T.vignetteK); gl.uniform1f(u.uUseGain, this._bgGain && !transparent ? 1 : 0); if (this._bgGain) gl.uniform3fv(u.uGain, this._bgGain); gl.uniform1f(u.uFlip, flip ? 1 : 0); gl.uniform2f(u.uOutRes, w, h); gl.uniform1f(u.uTransparent, transparent ? 1 : 0);
       this._draw(fb, w, h);
       // dust, lit by the beam's glow
       if (hb && !transparent && this.theme === 'dark' && this.lightMode === 'beam') {
@@ -824,7 +916,7 @@
       return cam;
     }
     _loop(now) {
-      if (this._disposed) return; this._raf = requestAnimationFrame(this._loop.bind(this));
+      if (this._disposed || this._suspended) return; this._raf = requestAnimationFrame(this._loop.bind(this));
       if (this.busy) return;
       const dt = Math.min(0.1, (now - this._lastT) / 1000); this._lastT = now;
       this._fpsA += dt; this._fpsN++; if (this._fpsA > 0.5) { this._emit('fps', Math.round(this._fpsN / this._fpsA)); this._fpsA = 0; this._fpsN = 0; }
@@ -857,7 +949,7 @@
         if (moving && this._ft < 12) { this.frame++; this._sample(P, pose, 0.3, cam, this.frame, 0.0); } // spare GPU time → a second AA sample
         this.samples++;
       }
-      this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, false);
+      this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, !!this.transparent);
     }
     // ── offline rendering
     _wait() { const gl = this.gl; const s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); return new Promise(r => { const p = () => { if (gl.clientWaitSync(s, 0, 0) === gl.TIMEOUT_EXPIRED) { setTimeout(p, 2); return; } gl.deleteSync(s); r(); }; p(); }); }
@@ -926,5 +1018,6 @@
   }
   SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
   SpectraEngine.version = 2;
+  SpectraEngine._toneMap = toneMapJS; SpectraEngine._solveBackdrop = solveBackdrop; // embed helpers (tests)
   window.SpectraEngine = SpectraEngine;
 })();
