@@ -1290,8 +1290,15 @@
       const S = R.samples;
       return { version: 1, duration: S[S.length - 1].t, samples: S, thumbs: R.thumbs, aspect: this._vf ? this._vf.aspect : this.canvas.width / this.canvas.height };
     }
-    _lookKey() { return this.material + '|' + this.theme + '|' + this.lightMode; }
-    _setLookKey(k) { if (!k || k === this._lookKey()) return; const [m, t, l] = k.split('|'); this.setMaterial(m); this.setTheme(t); this.setLightMode(l); }
+    // the recorded "look": everything besides pose/aim that changes the image (material, theme, light mode, light source)
+    _lookKey() { return this.material + '|' + this.theme + '|' + this.lightMode + '|' + this.source; }
+    _setLookKey(k) {
+      if (!k || k === this._lookKey()) return; const [m, t, l, src] = k.split('|');
+      this.setMaterial(m); this.setTheme(t); this.setLightMode(l); if (src) this.setLightSource(src); // older timelines: no source
+      this._emit('look', { material: this.material, theme: this.theme, lightMode: this.lightMode, source: this.source });
+    }
+    /** The current look { material, theme, lightMode, source } (what a timeline records per frame). */
+    getLook() { return { material: this.material, theme: this.theme, lightMode: this.lightMode, source: this.source }; }
     _recPush(t, pose) {
       const S = this._rec.samples, p = S[S.length - 1];
       if (p && t <= p.t + 1e-4) return;
@@ -1343,6 +1350,7 @@
       Object.assign(this.rot, s.rot); Object.assign(this.aim, s.aim); Object.assign(this.target, s.target);
       this.aimOff = s.aimOff; this._bestOff = s.bestOff; this.envYaw = s.envYaw; this.envYawT = s.envYawT; this.time = s.time;
       this.pointer = s.pointer; this.lastPointerT = s.lastPointerT; this._setLookKey(s.look); this._bestAng = null; this._dirty = true;
+      this._emit('look', this.getLook()); // whatever the replay showed last, the UI now matches the live look
     }
     _replayStep(dt) { // replaces _updateTargets + spin integration while replaying; returns the live camera
       const r = this._replay;

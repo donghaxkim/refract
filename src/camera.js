@@ -443,7 +443,17 @@
       return x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h;
     }
 
-    const inst = { open: openCam, close: closeCam, isOpen: () => st.open, state: () => st.state, steers, setMode, setAspect, _st: st };
+    /** Why the scene may not change right now ('' = it may): while recording, previewing or rendering, the look and the logo are
+     *  pinned so the replay / MP4 show exactly what was recorded. SpectraUI blocks G/C, drops, uploads and pill actions with it. */
+    function lockReason() {
+      if (!st.open) return '';
+      if (st.state === 'rec') return 'Not while recording';
+      if (st.rendering || st.state === 'busy') return 'Not while rendering';
+      if (st.state === 'preview') return 'Not while previewing · Retake first';
+      return '';
+    }
+
+    const inst = { open: openCam, close: closeCam, isOpen: () => st.open, state: () => st.state, steers, lockReason, setMode, setAspect, _st: st };
     global.SpectraCamera.instance = inst; // handy for tests / embedding
     return inst;
   }

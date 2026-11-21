@@ -21,7 +21,7 @@
     const Engine = global.SpectraEngine || (engine && engine.constructor) || {};
     const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Spectra UI] engine.' + name, e); } };
 
-    let material = 'glass', uiHidden = false, paused = false;
+    let material = 'glass', uiHidden = false, paused = false, api = null;
     let buildToken = 0, activeSample = null, exporting = null, logoName = '';
 
     /* ───── toast ───── */
@@ -38,6 +38,14 @@
       const open = openPop && !openPop.hidden ? openPop : null;
       toastEl.style.bottom = open ? 'calc(100% + ' + (open.offsetHeight + 22) + 'px)' : '';
     }
+
+    /* ───── scene lock: while the camera records / previews / renders, or any render runs, the scene must not change ───── */
+    function lockReason() {
+      const cam = api && api.camera; const r = cam && cam.lockReason ? cam.lockReason() : '';
+      if (r) return r;
+      return engine && engine.busy ? 'Not while exporting' : '';
+    }
+    function blocked() { const r = lockReason(); if (r) toast(r, null, 1800); return !!r; }
 
     /* ───── material ───── */
     function placeIndicator(anim) {
@@ -57,10 +65,10 @@
       placeIndicator(anim !== false);
       call('setMaterial', m);
     }
-    seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b) setMaterial(b.dataset.material); });
+    seg.addEventListener('click', (e) => { const b = e.target.closest('button[data-material]'); if (b && !blocked()) setMaterial(b.dataset.material); });
     seg.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        e.preventDefault(); const m = material === 'glass' ? 'chrome' : 'glass';
+        e.preventDefault(); if (blocked()) return; const m = material === 'glass' ? 'chrome' : 'glass';
         setMaterial(m); $('button[data-material="' + m + '"]', seg).focus();
       }
     });
@@ -109,7 +117,8 @@
       const bind = (id, key) => {
         const el = $('#' + id), out = $('#' + id + '-v');
         const paint = () => { el.style.setProperty('--p', el.value + '%'); out.textContent = el.value; };
-        el.addEventListener('input', () => { paint(); st[key] = el.value / 100; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => call('setShape', { ...st })); });
+        let applied = el.value;
+        el.addEventListener('input', () => { if (blocked()) { el.value = applied; paint(); return; } applied = el.value; paint(); st[key] = el.value / 100; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => call('setShape', { ...st })); });
         el.addEventListener('dblclick', () => { el.value = key === 'thickness' ? 50 : 65; el.dispatchEvent(new Event('input')); });
         paint();
       };
@@ -122,6 +131,7 @@
     function setSource(v) { pick('source', v); call('setLightSource', v); }
     popLight.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
+      if ((b.dataset.light || b.dataset.theme || b.dataset.source) && blocked()) return;
       if (b.dataset.light) setLight(b.dataset.light);
       if (b.dataset.theme) setTheme(b.dataset.theme);
       if (b.dataset.source) setSource(b.dataset.source);
@@ -182,7 +192,7 @@
       b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', s.name || 'Sample ' + (i + 1)); b.title = s.name || '';
       const url = whiteSvgURL(s.svg);
       if (url) { const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = url; b.appendChild(img); }
-      b.addEventListener('click', () => loadSample(i));
+      b.addEventListener('click', () => { if (!blocked()) loadSample(i); });
       sampleRow.appendChild(b);
     });
     function markSample(sid, busy) {
@@ -220,6 +230,7 @@
     }
     async function loadFile(file) {
       if (!file) return;
+      if (blocked()) return;
       const name = file.name || 'file';
       const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(name);
       const isImg = /^image\/(png|jpe?g|webp)$/i.test(file.type) || /\.(png|jpe?g|webp)$/i.test(name);
@@ -235,12 +246,12 @@
       return buildField({ type: 'image', blob: file }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
     }
     const fileIn = $('#sp-file');
-    $('#sp-pick').addEventListener('click', () => fileIn.click());
+    $('#sp-pick').addEventListener('click', () => { if (!blocked()) fileIn.click(); });
     fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; loadFile(f); });
     const wordForm = $('#sp-word'), wordIn = $('#sp-word-in');
     wordForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const w = wordIn.value.trim(); if (!w) return;
+      const w = wordIn.value.trim(); if (!w || blocked()) return;
       activeSample = null; markSample(null);
       buildField({ type: 'text', text: w, fontFamily: '"Instrument Sans", Inter, system-ui, sans-serif', fontWeight: 700 }, { done: 'Using “' + w + '”', name: w });
       wordIn.blur(); close();
@@ -249,7 +260,7 @@
     // drag & drop anywhere
     const dz = $('#sp-dropzone'); let depth = 0;
     const hasFiles = (e) => e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0;
-    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; dz.classList.add('is-on'); });
+    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; if (!lockReason()) dz.classList.add('is-on'); });
     window.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
     window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) dz.classList.remove('is-on'); });
     window.addEventListener('drop', (e) => {
@@ -441,8 +452,7 @@
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
-      if (k === 'g') setMaterial('glass');
-      else if (k === 'c') setMaterial('chrome');
+      if (k === 'g' || k === 'c') { if (!blocked()) setMaterial(k === 'g' ? 'glass' : 'chrome'); }
       else if (k === 'h') setHidden(!uiHidden);
       else if (e.key === ' ' || e.code === 'Space') {
         if (t && t.tagName === 'BUTTON' && t.matches(':focus-visible')) return; // keyboard users: Space activates the focused button
@@ -466,6 +476,16 @@
     if (engine && typeof engine.on === 'function') {
       engine.on('error', (e) => { console.error('[Spectra UI] engine error', e); toast((e && e.message) || 'Rendering error', 'err', 4200); });
       engine.on('ready', () => ui.classList.add('is-in'));
+      // the engine changed its look by itself (timeline replay / restore): make the pill agree, without calling back into it
+      engine.on('look', (l) => {
+        if (!l) return;
+        if ((l.material === 'glass' || l.material === 'chrome') && l.material !== material) {
+          material = l.material;
+          $$('button[data-material]', seg).forEach((b) => { const on = b.dataset.material === material; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+          placeIndicator(false);
+        }
+        pick('light', l.lightMode); pick('theme', l.theme); root.classList.toggle('is-light', l.theme === 'light'); pick('source', l.source);
+      });
     }
 
     /* ───── boot ───── */
@@ -480,7 +500,7 @@
     }
     if (!engine) toast('Renderer unavailable in this browser', 'err', 6000);
 
-    const api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
+    api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
     // camera mode (src/camera.js): Photo / Video / Loop with viewfinder, trimmer and offline capture
     if (global.SpectraCamera) { try { api.camera = global.SpectraCamera.init(engine, api); } catch (e) { console.error('[Spectra UI] camera', e); } }
     return api;
