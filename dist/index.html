@@ -277,6 +277,132 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 .sp-sl input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--sp-ink-3); }
 .sp-root.is-light .sp-sl input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255,255,255,.5), 0 1px 3px rgba(0,0,0,.25); }
 
+/* ───── Camera mode (src/camera.js) · UX adapted from 3dsvg by Renato Costa, MIT ───── */
+.sp-btn--icon { flex: none !important; width: 40px; padding: 0 !important; display: grid; place-items: center; }
+.sp-btn--icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linejoin: round; }
+.sp-ui.is-cam .sp-pill, .sp-ui.is-cam .sp-pop, .sp-ui.is-cam .sp-hint { display: none !important; }
+.sp-ui.is-cam .sp-dock { transition: bottom 220ms var(--sp-ease); }
+.sp-cam { position: absolute; inset: 0; pointer-events: none; }
+.sp-cam > * { pointer-events: auto; }
+.sp-cam-checker { position: absolute; pointer-events: none; background: repeating-conic-gradient(#2a2a2e 0 25%, #1c1c1f 0 50%) 0 0 / 16px 16px; }
+.sp-root.is-light .sp-cam-checker { background: repeating-conic-gradient(#e9e6e1 0 25%, #f7f6f3 0 50%) 0 0 / 16px 16px; }
+
+/* viewfinder: the canvas draws only inside this frame (engine.setFrameAspect), the rest is scrim */
+.sp-vf { position: absolute; pointer-events: none !important; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 0 100vmax rgba(0, 0, 0, 0.32); transition: box-shadow 200ms var(--sp-ease); }
+.sp-root.is-light .sp-vf { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.14), 0 0 0 100vmax rgba(0, 0, 0, 0.07); }
+.sp-vf-c { position: absolute; width: 14px; height: 14px; border: 0 solid rgba(255, 255, 255, 0.9); transition: border-color 200ms var(--sp-ease); }
+.sp-root.is-light .sp-vf-c { border-color: rgba(23, 23, 26, 0.75); }
+.sp-vf-c--tl { left: -1px; top: -1px; border-left-width: 1.5px; border-top-width: 1.5px; }
+.sp-vf-c--tr { right: -1px; top: -1px; border-right-width: 1.5px; border-top-width: 1.5px; }
+.sp-vf-c--bl { left: -1px; bottom: -1px; border-left-width: 1.5px; border-bottom-width: 1.5px; }
+.sp-vf-c--br { right: -1px; bottom: -1px; border-right-width: 1.5px; border-bottom-width: 1.5px; }
+.sp-vf.is-rec { box-shadow: 0 0 0 1px rgba(255, 69, 58, 0.55), 0 0 0 100vmax rgba(0, 0, 0, 0.32); }
+.sp-vf.is-rec .sp-vf-c { border-color: #ff453a; }
+.sp-vf-size { position: absolute; right: 0; top: -20px; font: 400 10px var(--sp-mono); letter-spacing: 0.06em; color: var(--sp-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-vf-media { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: fill; }
+.sp-vf-media.is-clear { background: repeating-conic-gradient(#2a2a2e 0 25%, #1c1c1f 0 50%) 0 0 / 16px 16px; }
+.sp-root.is-light .sp-vf-media.is-clear { background: repeating-conic-gradient(#e9e6e1 0 25%, #f7f6f3 0 50%) 0 0 / 16px 16px; }
+.sp-vf-flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+.sp-vf-flash.is-on { animation: sp-flash 420ms var(--sp-ease) both; }
+@keyframes sp-flash { from { opacity: 0.85; } to { opacity: 0; } }
+
+/* bottom stack: same anchor as the pill */
+.sp-cam-bar, .sp-cam-pill, .sp-sheet { position: absolute; left: 50%; bottom: var(--sp-safe-b); transform: translateX(-50%); }
+.sp-cam-bar { display: flex; flex-direction: column; align-items: center; gap: 10px; animation: sp-cam-in 260ms var(--sp-ease) both; }
+@keyframes sp-cam-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.sp-cam-opts { display: flex; align-items: center; height: 36px; padding: 3px; gap: 1px; border-radius: 999px; background: var(--sp-glass); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line), 0 12px 40px -12px rgba(0, 0, 0, 0.8); }
+.sp-cam-opts .sp-div { margin: 0 3px; height: 16px; }
+.sp-cam-aspect { display: flex; height: 100%; gap: 1px; }
+.sp-cam-aspect button, .sp-cam-res, .sp-cam-fps button { height: 100%; padding: 0 10px; border-radius: 999px; font: 500 11px var(--sp-mono); letter-spacing: 0.02em; color: var(--sp-ink-3); transition: color 160ms var(--sp-ease), background-color 160ms var(--sp-ease); white-space: nowrap; }
+.sp-cam-aspect button:hover, .sp-cam-res:hover, .sp-cam-fps button:hover { color: var(--sp-ink); }
+.sp-cam-aspect button[aria-checked="true"], .sp-cam-fps button[aria-checked="true"] { color: var(--sp-ink); background: var(--sp-fill-2); }
+.sp-cam-res { color: var(--sp-ink-2); min-width: 52px; }
+.sp-cam-modes { display: flex; gap: 2px; }
+.sp-cam-modes button { position: relative; padding: 6px 11px; font-size: 12px; font-weight: 550; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sp-ink-3); transition: color 160ms var(--sp-ease); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
+.sp-root.is-light .sp-cam-modes button { text-shadow: none; }
+.sp-cam-modes button:hover { color: var(--sp-ink-2); }
+.sp-cam-modes button[aria-checked="true"] { color: var(--sp-ink); }
+.sp-cam-modes button[aria-checked="true"]::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 1px; height: 1px; background: var(--sp-spectrum); }
+.sp-cam-row { display: grid; grid-template-columns: 44px 72px 44px; align-items: center; gap: 28px; }
+.sp-cam-round { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--sp-ink-2); background: var(--sp-glass); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line); transition: color 160ms var(--sp-ease), background-color 160ms var(--sp-ease); }
+.sp-cam-round:hover { color: var(--sp-ink); }
+.sp-cam-round svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.sp-cam-round svg .f { fill: currentColor; stroke: none; opacity: 0; transition: opacity 160ms var(--sp-ease); }
+.sp-cam-round[aria-pressed="true"] { color: var(--sp-ink); background: var(--sp-fill-2); box-shadow: inset 0 0 0 1px var(--sp-line-2); }
+.sp-cam-round[aria-pressed="true"] svg .f { opacity: 0.85; }
+.sp-cam-round.is-off { visibility: hidden; }
+
+/* shutter (ported from 3dsvg's ShutterButton: ring + inner fill; white = photo, red = record) */
+.sp-shutter { position: relative; width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 3px #fff, 0 10px 30px -10px rgba(0, 0, 0, 0.7); transition: box-shadow 260ms var(--sp-ease); }
+.sp-shutter-core { width: 58px; height: 58px; border-radius: 50%; background: #fff; transition: transform 160ms var(--sp-ease), background-color 260ms var(--sp-ease), border-radius 260ms var(--sp-ease); }
+.sp-shutter:active .sp-shutter-core { transform: scale(0.9); }
+.sp-shutter[data-mode="video"] { box-shadow: inset 0 0 0 3px #ff453a, 0 10px 30px -10px rgba(0, 0, 0, 0.7); }
+.sp-shutter[data-mode="video"] .sp-shutter-core { background: #ff453a; }
+.sp-shutter[data-mode="loop"] .sp-shutter-core { background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2317171a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 2.5l2.5 2.5L17 7.5'/%3E%3Cpath d='M4.5 11V9.5a4.5 4.5 0 0 1 4.5-4.5h10.5'/%3E%3Cpath d='M7 21.5L4.5 19 7 16.5'/%3E%3Cpath d='M19.5 13v1.5a4.5 4.5 0 0 1-4.5 4.5H4.5'/%3E%3C/svg%3E") center / 24px no-repeat; }
+.sp-shutter.is-busy .sp-shutter-core { transform: scale(0.72); animation: sp-pulse 700ms ease-in-out infinite alternate; }
+.sp-shutter:focus-visible { outline-offset: 3px; }
+.sp-root.is-light .sp-shutter { box-shadow: inset 0 0 0 3px #17171a, 0 10px 30px -14px rgba(0, 0, 0, 0.35); }
+.sp-root.is-light .sp-shutter[data-mode="photo"] .sp-shutter-core, .sp-root.is-light .sp-shutter[data-mode="loop"] .sp-shutter-core { background-color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.sp-root.is-light .sp-shutter[data-mode="video"] { box-shadow: inset 0 0 0 3px #ff453a, 0 10px 30px -14px rgba(0, 0, 0, 0.35); }
+.sp-cam-note { margin: 0; max-width: 340px; text-align: center; font-size: 11px; letter-spacing: 0.02em; color: var(--sp-ink-3); text-wrap: balance; }
+
+/* recording pill + busy pill (3dsvg's recording pill: dot, timer, stop) */
+.sp-cam-pill { display: flex; align-items: center; gap: 12px; border-radius: 999px; background: var(--sp-glass-pop); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line), 0 12px 40px -12px rgba(0, 0, 0, 0.8); animation: sp-cam-in 220ms var(--sp-ease) both; }
+.sp-cam-rec { height: 48px; padding: 0 6px 0 18px; }
+.sp-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff453a; box-shadow: 0 0 10px rgba(255, 69, 58, 0.7); animation: sp-pulse 800ms ease-in-out infinite alternate; }
+.sp-rec-time { min-width: 6ch; font: 500 13px var(--sp-mono); color: var(--sp-ink); font-variant-numeric: tabular-nums; }
+.sp-rec-stop { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 999px; background: #ff453a; color: #fff !important; font-size: 12px; font-weight: 600; transition: background-color 160ms var(--sp-ease); }
+.sp-rec-stop:hover { background: #ff5b52; }
+.sp-rec-stop i { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
+.sp-cam-busy { width: min(320px, calc(100vw - 24px)); border-radius: 16px; }
+.sp-cam-busy .sp-prog { width: 100%; }
+
+/* preview sheet */
+.sp-sheet { width: min(520px, calc(100vw - 24px)); padding: 12px; border-radius: 20px; background: var(--sp-glass-pop); -webkit-backdrop-filter: var(--sp-blur); backdrop-filter: var(--sp-blur); box-shadow: inset 0 0 0 1px var(--sp-line), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 24px 60px -20px rgba(0, 0, 0, 0.9); animation: sp-cam-in 240ms var(--sp-ease) both; }
+.sp-sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 2px 4px 10px; }
+.sp-sheet-opts { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 0 2px; }
+.sp-sheet-opts[hidden] { display: none; }
+.sp-cam-fps { display: flex; height: 28px; padding: 2px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--sp-line); flex: none; }
+.sp-sheet-note { margin: 0; font-size: 11px; line-height: 1.35; color: var(--sp-ink-3); }
+.sp-sheet-prog { margin-top: 6px; }
+.sp-sheet-prog .sp-prog { padding: 8px 4px 6px; }
+.sp-sheet-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+.sp-sbtn { height: 38px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--sp-ink-2); transition: color 160ms var(--sp-ease), background-color 160ms var(--sp-ease); }
+.sp-sbtn:hover { color: var(--sp-ink); background: var(--sp-fill); }
+.sp-sbtn--primary { color: var(--sp-void) !important; background: var(--sp-ink); }
+.sp-sbtn--primary:hover { background: var(--sp-ink); opacity: 0.88; }
+
+/* filmstrip trimmer (ported from 3dsvg's VideoTrimmer: thumbs, dimmed outside, yellow frame, handles, playhead) */
+.sp-trim-main { display: flex; align-items: center; gap: 8px; }
+.sp-trim-play { width: 36px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 10px; color: var(--sp-ink); }
+.sp-trim-play:hover { background: var(--sp-fill); }
+.sp-trim-play svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sp-trim-play .i-play { fill: currentColor; stroke-width: 1; }
+.sp-trim-play .i-play, .sp-trim-play.is-paused .i-pause { display: none; }
+.sp-trim-play.is-paused .i-play { display: block; }
+.sp-trim-strip { --hw: 14px; position: relative; flex: 1; height: 48px; touch-action: none; -webkit-user-select: none; user-select: none; cursor: pointer; }
+.sp-trim-film { position: absolute; top: 0; bottom: 0; left: var(--hw); right: var(--hw); width: calc(100% - 2 * var(--hw)); height: 100%; border-radius: 3px; background: rgba(255, 255, 255, 0.05); }
+.sp-trim-dim { position: absolute; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.62); pointer-events: none; }
+.sp-trim-sel { position: absolute; top: 0; bottom: 0; border-top: 3px solid #ffcc33; border-bottom: 3px solid #ffcc33; border-radius: 6px; pointer-events: none; }
+.sp-trim-head { position: absolute; top: -3px; bottom: -3px; left: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: #fff; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); pointer-events: none; z-index: 2; }
+.sp-trim-h { position: absolute; top: 0; bottom: 0; width: var(--hw); display: grid; place-items: center; background: #ffcc33; color: #6b4c00; cursor: ew-resize; z-index: 3; touch-action: none; }
+.sp-trim-h--s { border-radius: 6px 0 0 6px; }
+.sp-trim-h--e { border-radius: 0 6px 6px 0; }
+.sp-trim-h svg { width: 6px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.sp-trim-h::before { content: ""; position: absolute; inset: -6px -8px; } /* bigger touch target */
+.sp-trim-h:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.sp-trim-times { display: flex; justify-content: space-between; padding: 6px 4px 0 58px; font: 400 10px var(--sp-mono); color: var(--sp-ink-3); font-variant-numeric: tabular-nums; }
+.sp-trim-times #sp-trim-len { color: var(--sp-ink-2); }
+
+@media (max-width: 560px) {
+  .sp-cam-aspect button, .sp-cam-res { padding: 0 8px; }
+  .sp-cam-row { gap: 22px; }
+  .sp-sheet-opts { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-vf-flash { display: none; }
+}
+
 .spectra-fatal{position:fixed;inset:auto 16px 16px 16px;margin:auto;max-width:420px;padding:16px 18px;border-radius:12px;background:#111214;color:#e8e8ea;border:1px solid rgba(255,255,255,.12);font:13px/1.5 system-ui,sans-serif;display:grid;gap:4px;z-index:9999}
 </style>
 </head>
@@ -377,6 +503,110 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         <button type="button" class="sp-btn" id="sp-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-light">Light</button>
         <button type="button" class="sp-btn" id="sp-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-logo">Logo</button>
         <button type="button" class="sp-btn" id="sp-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-export">Export</button>
+        <button type="button" class="sp-btn sp-btn--icon" id="sp-camera" aria-label="Camera" title="Camera (K)" aria-keyshortcuts="K" aria-expanded="false" aria-controls="sp-cam">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.25 5.75c0-.69.56-1.25 1.25-1.25h1.6l.95-1.5h3.9l.95 1.5h1.6c.69 0 1.25.56 1.25 1.25v5.5c0 .69-.56 1.25-1.25 1.25h-9c-.69 0-1.25-.56-1.25-1.25z"/><circle cx="8" cy="8.4" r="2.2"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Camera mode (src/camera.js). Camera UX adapted from 3dsvg by Renato Costa, MIT. -->
+    <div class="sp-cam" id="sp-cam" hidden>
+      <div class="sp-vf" id="sp-vf" aria-hidden="true">
+        <i class="sp-vf-c sp-vf-c--tl"></i><i class="sp-vf-c sp-vf-c--tr"></i><i class="sp-vf-c sp-vf-c--bl"></i><i class="sp-vf-c sp-vf-c--br"></i>
+        <span class="sp-vf-size" id="sp-vf-size"></span>
+        <img class="sp-vf-media" id="sp-vf-img" alt="" hidden>
+        <video class="sp-vf-media" id="sp-vf-video" muted loop playsinline hidden></video>
+        <span class="sp-vf-flash" id="sp-vf-flash"></span>
+      </div>
+
+      <div class="sp-cam-bar" id="sp-cam-bar" role="group" aria-label="Camera">
+        <div class="sp-cam-opts">
+          <div class="sp-cam-aspect" id="sp-cam-aspect" role="radiogroup" aria-label="Aspect ratio">
+            <button type="button" role="radio" data-aspect="free" aria-checked="true">Free</button>
+            <button type="button" role="radio" data-aspect="1:1" aria-checked="false">1:1</button>
+            <button type="button" role="radio" data-aspect="4:5" aria-checked="false">4:5</button>
+            <button type="button" role="radio" data-aspect="9:16" aria-checked="false">9:16</button>
+            <button type="button" role="radio" data-aspect="16:9" aria-checked="false">16:9</button>
+          </div>
+          <span class="sp-div" aria-hidden="true"></span>
+          <button type="button" class="sp-cam-res" id="sp-cam-res" aria-label="Resolution 1080p">1080p</button>
+        </div>
+        <div class="sp-cam-modes" id="sp-cam-modes" role="radiogroup" aria-label="Capture mode">
+          <button type="button" role="radio" data-mode="photo" aria-checked="true">Photo</button>
+          <button type="button" role="radio" data-mode="video" aria-checked="false">Video</button>
+          <button type="button" role="radio" data-mode="loop" aria-checked="false">Loop</button>
+        </div>
+        <div class="sp-cam-row">
+          <button type="button" class="sp-cam-round" id="sp-cam-close" aria-label="Close camera" title="Close (Esc)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+          </button>
+          <button type="button" class="sp-shutter" id="sp-shutter" data-mode="photo" aria-label="Take photo"><span class="sp-shutter-core"></span></button>
+          <button type="button" class="sp-cam-round" id="sp-cam-clear" aria-pressed="false" aria-label="Transparent background" title="Transparent background">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2"/><path class="f" d="M3 5a2 2 0 0 1 2-2h3v5H3zM8 8h5v3a2 2 0 0 1-2 2H8z"/></svg>
+          </button>
+        </div>
+        <p class="sp-cam-note" id="sp-cam-note"></p>
+      </div>
+
+      <div class="sp-cam-pill sp-cam-rec" id="sp-cam-rec" role="group" aria-label="Recording" hidden>
+        <span class="sp-rec-dot" aria-hidden="true"></span>
+        <span class="sp-rec-time" id="sp-rec-time" role="timer" aria-label="Recording time">0:00.0</span>
+        <button type="button" class="sp-rec-stop" id="sp-rec-stop"><i aria-hidden="true"></i>Stop</button>
+      </div>
+
+      <div class="sp-cam-pill sp-cam-busy" id="sp-cam-busy" role="group" aria-label="Rendering" hidden>
+        <div class="sp-prog">
+          <div class="sp-prog-top">
+            <span class="sp-row-t" id="sp-busy-label">Rendering</span>
+            <span class="sp-prog-pct" id="sp-busy-pct">0%</span>
+            <button type="button" class="sp-cancel" id="sp-busy-cancel">Cancel</button>
+          </div>
+          <div class="sp-prog-bar" role="progressbar" aria-label="Render progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-busy-fill"></i></div>
+        </div>
+      </div>
+
+      <div class="sp-sheet" id="sp-sheet" role="dialog" aria-label="Preview" aria-describedby="sp-sheet-meta" hidden>
+        <div class="sp-sheet-head">
+          <span class="sp-row-t" id="sp-sheet-title">Photo</span>
+          <span class="sp-row-s" id="sp-sheet-meta"></span>
+        </div>
+        <div class="sp-trim" id="sp-trim" hidden>
+          <div class="sp-trim-main">
+            <button type="button" class="sp-trim-play" id="sp-trim-play" aria-label="Pause">
+              <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4v8M10.5 4v8"/></svg>
+              <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.8l6.5 4.2-6.5 4.2z"/></svg>
+            </button>
+            <div class="sp-trim-strip" id="sp-trim-strip">
+              <canvas class="sp-trim-film" id="sp-trim-film" aria-hidden="true"></canvas>
+              <i class="sp-trim-dim" id="sp-trim-dim-l"></i><i class="sp-trim-dim" id="sp-trim-dim-r"></i>
+              <i class="sp-trim-sel" id="sp-trim-sel"></i>
+              <i class="sp-trim-head" id="sp-trim-head"></i>
+              <span class="sp-trim-h sp-trim-h--s" id="sp-trim-hs" role="slider" tabindex="0" aria-label="Trim start" data-handle="start"><svg viewBox="0 0 6 16" aria-hidden="true"><path d="M4 3L2 8l2 5"/></svg></span>
+              <span class="sp-trim-h sp-trim-h--e" id="sp-trim-he" role="slider" tabindex="0" aria-label="Trim end" data-handle="end"><svg viewBox="0 0 6 16" aria-hidden="true"><path d="M2 3l2 5-2 5"/></svg></span>
+            </div>
+          </div>
+          <div class="sp-trim-times" aria-hidden="true"><span id="sp-trim-t0">0.0s</span><span id="sp-trim-len">0.0s</span><span id="sp-trim-t1">0.0s</span></div>
+        </div>
+        <div class="sp-sheet-opts" id="sp-sheet-opts" hidden>
+          <div class="sp-cam-fps" id="sp-cam-fps" role="radiogroup" aria-label="Frame rate">
+            <button type="button" role="radio" data-fps="30" aria-checked="false">30 fps</button>
+            <button type="button" role="radio" data-fps="60" aria-checked="true">60 fps</button>
+          </div>
+          <p class="sp-sheet-note" id="sp-sheet-note">Rendered offline, frame by frame: smooth even if the live view stuttered.</p>
+        </div>
+        <div class="sp-sheet-prog" id="sp-sheet-prog" hidden>
+          <div class="sp-prog">
+            <div class="sp-prog-top">
+              <span class="sp-row-t" id="sp-sheet-prog-label">Rendering</span>
+              <span class="sp-prog-pct" id="sp-sheet-prog-pct">0%</span>
+              <button type="button" class="sp-cancel" id="sp-sheet-cancel">Cancel</button>
+            </div>
+            <div class="sp-prog-bar" role="progressbar" aria-label="Render progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="sp-sheet-prog-fill"></i></div>
+          </div>
+        </div>
+        <div class="sp-sheet-actions" id="sp-sheet-actions">
+          <button type="button" class="sp-sbtn" id="sp-retake">Retake</button>
+          <button type="button" class="sp-sbtn sp-sbtn--primary" id="sp-dl">Download</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2271,6 +2501,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       if (this._bgSrgb !== undefined || this.transparent) this._syncBg();
     }
     _insetCam(W, H) { // CSS-size based framing: centre in free area, fit width on portrait screens
+      if (this._vf) return this._vfCam(W, H); // camera viewfinder
       const r = Math.min(this.ins.r, W * 0.6), b = Math.min(this.ins.b, H * 0.6);
       const k = Math.max(1, (H * 1.15) / Math.max(W - r, 1), H / Math.max(H - b, 1));
       return { cx: -r / W, cy: b / H, k };
@@ -2462,23 +2693,25 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       const dt = Math.min(0.1, (now - this._lastT) / 1000); this._lastT = now;
       this._fpsA += dt; this._fpsN++; if (this._fpsA > 0.5) { this._emit('fps', Math.round(this._fpsN / this._fpsA)); this._fpsA = 0; this._fpsN = 0; }
       if (!this.paused) this.time += dt;
-      const cam = this._updateTargets(dt);
+      const cam = this._replay ? this._replayStep(dt) : this._updateTargets(dt);
+      const vf = this._vf ? this._vfPipe() : null, rcam = vf ? vf.cam : cam; // camera viewfinder: render only the frame, offline camera
       // spin inertia / reset
       const r = this.rot;
-      if (r.reset) { const k = 1 - Math.exp(-dt * 6); const ty = Math.round(r.yaw / (2 * Math.PI)) * 2 * Math.PI; r.yaw += (ty - r.yaw) * k; r.pitch += (0 - r.pitch) * k; if (Math.abs(ty - r.yaw) < 1e-4 && Math.abs(r.pitch) < 1e-4) { r.yaw = 0; r.pitch = 0; r.reset = false; } }
+      if (this._replay) { /* timeline replay drives the pose */ }
+      else if (r.reset) { const k = 1 - Math.exp(-dt * 6); const ty = Math.round(r.yaw / (2 * Math.PI)) * 2 * Math.PI; r.yaw += (ty - r.yaw) * k; r.pitch += (0 - r.pitch) * k; if (Math.abs(ty - r.yaw) < 1e-4 && Math.abs(r.pitch) < 1e-4) { r.yaw = 0; r.pitch = 0; r.reset = false; } }
       else if (!r.drag && (Math.abs(r.vy) > 1e-4 || Math.abs(r.vp) > 1e-4)) { r.yaw += r.vy * dt; r.pitch = clamp(r.pitch + r.vp * dt, -1.35, 1.35); const d = Math.exp(-dt * 2.6); r.vy *= d; r.vp *= d; if (Math.abs(r.vy) < 1e-3) r.vy = 0; if (Math.abs(r.vp) < 1e-3) r.vp = 0; }
       const pose = this._pose(); const Rm = rotYX(pose.yaw, pose.pitch);
       const rotKey = pose.yaw.toFixed(4) + ',' + pose.pitch.toFixed(4);
-      if (this.field && (this._bestAng == null || Math.abs(this.aim.ang - this._bestAng) > 0.01 || rotKey !== this._bestRot || this._dirty)) {
+      if (this.field && !this._replay && (this._bestAng == null || Math.abs(this.aim.ang - this._bestAng) > 0.01 || rotKey !== this._bestRot || this._dirty)) {
         if (!this._bestT || now - this._bestT > 60 || this._dirty) { this._bestT = now; this._bestAng = this.aim.ang; this._bestRot = rotKey; this._bestOff = this._bestOffset(this.aim.ang, Rm); }
       }
       if (this._bestOff != null) { this.aimOff = (this.aimOff ?? this._bestOff) + (this._bestOff - (this.aimOff ?? this._bestOff)) * (1 - Math.exp(-dt * 1.4)); }
-      const key = [(this.aimOff || 0).toFixed(4), this.envYaw.toFixed(4), this.aim.ang.toFixed(4), pose.yaw.toFixed(4), pose.pitch.toFixed(4), cam.cx.toFixed(4), cam.cy.toFixed(4), cam.k.toFixed(4)].join('|');
+      const key = [(this.aimOff || 0).toFixed(4), this.envYaw.toFixed(4), this.aim.ang.toFixed(4), pose.yaw.toFixed(4), pose.pitch.toFixed(4), rcam.cx.toFixed(4), rcam.cy.toFixed(4), rcam.k.toFixed(4)].join('|');
       const moving = key !== this._key; this._key = key;
       this._ft = this._ft * 0.9 + dt * 1000 * 0.1;
       if (moving && now - this._scaleT > 800) { this._scaleT = now; if (this._ft > 24 && this.autoScale > 0.55) { this.autoScale *= 0.85; this._resizeMain(); } else if (this._ft < 19 && this.autoScale < 1) { this.autoScale = Math.min(1, this.autoScale * 1.1); this._resizeMain(); } }
       if (!moving && this.autoScale < 1 && now - this._scaleT > 500) { this.autoScale = 1; this._scaleT = now; this._resizeMain(); }
-      const P = this.main; const target = 24;
+      const P = vf ? vf.P : this.main; const target = 24;
       if (moving || this._dirty || this.samples < target) {
         if (moving || this._dirty) this._uploadBeam(this._buildBeam(pose.ang, Rm));
         let blend;
@@ -2486,11 +2719,12 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
         else if (moving) { blend = this.samples === 0 ? 1 : 0.35; this.samples = 1; }
         else blend = 1 / (this.samples + 1);
         this.frame++;
-        this._sample(P, pose, blend, cam, this.frame, moving ? 0.0 : (this.frame * 0.6180339887) % 1); // jitter always on: motion stays antialiased
-        if (moving && this._ft < 12) { this.frame++; this._sample(P, pose, 0.3, cam, this.frame, 0.0); } // spare GPU time → a second AA sample
+        this._sample(P, pose, blend, rcam, this.frame, moving ? 0.0 : (this.frame * 0.6180339887) % 1); // jitter always on: motion stays antialiased
+        if (moving && this._ft < 12) { this.frame++; this._sample(P, pose, 0.3, rcam, this.frame, 0.0); } // spare GPU time → a second AA sample
         this.samples++;
       }
-      this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, !!this.transparent);
+      if (vf) this._vfPresent(vf); else this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, !!this.transparent);
+      if (this._rec) this._recFrame(pose);
     }
     // ── offline rendering
     _wait() { const gl = this.gl; const s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); return new Promise(r => { const p = () => { if (gl.clientWaitSync(s, 0, 0) === gl.TIMEOUT_EXPIRED) { setTimeout(p, 2); return; } gl.deleteSync(s); r(); }; p(); }); }
@@ -2508,13 +2742,17 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     _offlineCam(w, h) { // same framing as the live view, but without UI insets
       return { cx: 0, cy: 0, k: Math.max(1, (h * 1.15) / w) };
     }
-    async renderStill({ width, height, samples = 32, onProgress, transparent = false } = {}) {
+    /** PNG still, rendered offline at full quality. With `aspect` (w/h) it is framed exactly like the camera viewfinder
+     *  (setFrameAspect(aspect)); give width or height and the other side follows. Without aspect: the view framing for width×height. */
+    async renderStill({ width, height, aspect, samples = 32, onProgress, transparent = false } = {}) {
       if (this.busy) throw new Error('A render is already running.');
+      if (aspect > 0) { if (width && !height) height = width / aspect; else if (height && !width) width = height * aspect; }
       const w = clamp(Math.round(width || this.canvas.width), 16, this.maxTex), h = clamp(Math.round(height || this.canvas.height), 16, this.maxTex);
       this.busy = true; this._cancel = false; const P = this._pipe(w, h, true);
       try {
         if (onProgress) onProgress(0.05);
-        const px = await this._offlineFrame(P, this._pose(), this._offlineCam(w, h), samples, this.time, transparent);
+        const cam = aspect > 0 ? this._offlineCam(aspect, 1) : this._offlineCam(w, h);
+        const px = await this._offlineFrame(P, this._pose(), cam, samples, this.time, transparent);
         if (onProgress) onProgress(1);
         const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
         cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), w, h), 0, 0);
@@ -2526,35 +2764,195 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
       await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js'; s.onload = res; s.onerror = () => rej(new Error('Could not load the MP4 muxer.')); document.head.appendChild(s); });
       return window.Mp4Muxer;
     }
-    /** Seamless loop: the light sweeps across the logo and back over `seconds`. */
-    async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
+    /** Encode `frames` offline frames (render(P, f) → RGBA rows, top-down) to an H.264 MP4 Blob. Owns busy/cancel and the pipeline. */
+    async _encodeFrames({ w, h, fps, frames, render, onProgress }) {
       if (!SpectraEngine.canRenderVideo) throw new Error('This browser cannot encode MP4.');
       if (this.busy) throw new Error('A render is already running.');
-      const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2; const M = await this._muxer();
-      let config = null;
-      for (const codec of ['avc1.640033', 'avc1.640032', 'avc1.64002A', 'avc1.640028', 'avc1.4D402A', 'avc1.42E01F']) {
-        const cfg = { codec, width: w, height: h, bitrate: Math.round(w * h * fps * 0.2), framerate: fps, avc: { format: 'avc' } };
-        try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) { config = cfg; break; } } catch (e) { /* next */ }
-      }
-      if (!config) throw new Error('No supported H.264 encoder for ' + w + '×' + h + '.');
-      const target = new M.ArrayBufferTarget();
-      const muxer = new M.Muxer({ target, video: { codec: 'avc', width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
-      let err = null; const enc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { err = e; } }); enc.configure(config);
-      this.busy = true; this._cancel = false; const P = this._pipe(w, h, true); const frames = Math.round(fps * seconds); const cam = this._offlineCam(w, h);
-      const base = this._pose();
+      this.busy = true; this._cancel = false; let enc = null, P = null;
       try {
+        const M = await this._muxer();
+        let config = null;
+        for (const codec of ['avc1.640033', 'avc1.640032', 'avc1.64002A', 'avc1.640028', 'avc1.4D402A', 'avc1.42E01F']) {
+          const cfg = { codec, width: w, height: h, bitrate: Math.round(w * h * fps * 0.2), framerate: fps, avc: { format: 'avc' } };
+          try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) { config = cfg; break; } } catch (e) { /* next */ }
+        }
+        if (!config) throw new Error('No supported H.264 encoder for ' + w + '×' + h + '.');
+        const target = new M.ArrayBufferTarget();
+        const muxer = new M.Muxer({ target, video: { codec: 'avc', width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
+        let err = null; enc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { err = e; } }); enc.configure(config);
+        P = this._pipe(w, h, true);
         for (let f = 0; f < frames; f++) {
           if (err) throw err;
-          const t = f / fps, ph = 2 * Math.PI * t / seconds;
-          const pose = { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) };
-          this.aimOff = this._bestOffset(pose.ang, rotYX(pose.yaw, pose.pitch)); const px = await this._offlineFrame(P, pose, cam, spp, t * (12 / seconds), false);
+          const px = await render(P, f);
           const vf = new VideoFrame(px, { format: 'RGBA', codedWidth: w, codedHeight: h, timestamp: Math.round(f * 1e6 / fps), duration: Math.round(1e6 / fps) });
           enc.encode(vf, { keyFrame: f % (fps * 2) === 0 }); vf.close();
           while (enc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 4));
-          if (onProgress) onProgress((f + 1) / frames);
+          if (onProgress) onProgress((f + 1) / frames, { frame: f + 1, frames });
         }
-        await enc.flush(); muxer.finalize(); return new Blob([target.buffer], { type: 'video/mp4' });
-      } finally { try { enc.close(); } catch (e) { /* closed */ } this._free(P); this.busy = false; this._dirty = true; }
+        await enc.flush(); if (err) throw err; muxer.finalize(); return new Blob([target.buffer], { type: 'video/mp4' });
+      } finally { if (enc) { try { enc.close(); } catch (e) { /* closed */ } } if (P) this._free(P); this.busy = false; this._dirty = true; }
+    }
+    /** Seamless loop: the light sweeps across the logo and back over `seconds`. Any width×height (aspect = width/height). */
+    async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
+      const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2;
+      const frames = Math.round(fps * seconds), cam = this._offlineCam(w, h), base = this._pose(), keepOff = this.aimOff;
+      try {
+        return await this._encodeFrames({ w, h, fps, frames, onProgress, render: (P, f) => {
+          const t = f / fps, ph = 2 * Math.PI * t / seconds;
+          const pose = { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) };
+          this.aimOff = this._bestOffset(pose.ang, rotYX(pose.yaw, pose.pitch));
+          return this._offlineFrame(P, pose, cam, spp, t * (12 / seconds), false);
+        } });
+      } finally { this.aimOff = keepOff; }
+    }
+
+    // ── camera: viewfinder framing · timeline capture · live replay · offline timeline render
+    //
+    //   setFrameAspect(aspect|null, box?) → rect      live view rendered only inside an `aspect` frame, with the offline camera
+    //   startTimeline() / stopTimeline() → timeline   record what drives the image each frame (+ small thumbnails)
+    //   playTimeline(tl, opts) / setReplay / stopReplay   replay a timeline live (preview); live state is restored afterwards
+    //   sampleTimeline(tl, t) → state                 smooth resampling at any time
+    //   renderTimeline({ timeline, start, end, width, aspect, fps, spp, onProgress }) → MP4 Blob (offline, frame-perfect)
+    //
+    /**
+     * Frame the live view exactly like an offline render at `aspect` (w/h). `box` = { x, y, w, h } in CSS px of the canvas (default:
+     * the whole canvas); the frame is the largest `aspect` rectangle centred in it, and aspect 0 fills the box ("Free"). While framed,
+     * the live image is drawn only inside the frame with the same camera, background and grade as renderStill / renderTimeline
+     * at that aspect: the viewfinder is the output. Pointer steering maps through the frame. null ends framing.
+     * Returns { x, y, w, h, aspect } (CSS px) or null.
+     */
+    setFrameAspect(aspect, box) {
+      if (aspect == null || aspect === false) { if (this._vf) { this._free(this._vf.P); this._vf = null; this._dirty = true; } return null; }
+      const W = this.canvas.clientWidth || 1, H = this.canvas.clientHeight || 1;
+      const b = box || { x: 0, y: 0, w: W, h: H }, bw = Math.max(8, b.w), bh = Math.max(8, b.h);
+      const a = aspect > 0 ? aspect : bw / bh;
+      let w = bw, h = w / a; if (h > bh) { h = bh; w = h * a; }
+      const rect = { x: b.x + (bw - w) / 2, y: b.y + (bh - h) / 2, w, h };
+      this._vf = Object.assign(this._vf || {}, { aspect: a, rect }); this._dirty = true;
+      return { ...rect, aspect: a };
+    }
+    getFrame() { return this._vf ? { ...this._vf.rect, aspect: this._vf.aspect } : null; }
+    _vfCam(W, H) { // full-canvas camera whose frame region equals the offline camera (used for pointer steering)
+      const f = this._vf, r = f.rect;
+      return { cx: (r.x + r.w / 2) / W * 2 - 1, cy: 1 - (r.y + r.h / 2) / H * 2, k: this._offlineCam(f.aspect, 1).k * H / Math.max(r.h, 1) };
+    }
+    _vfPipe() { // pipeline sized to the frame (device px × autoScale), exact aspect
+      const f = this._vf, c = this.canvas, sx = c.width / (c.clientWidth || 1), sy = c.height / (c.clientHeight || 1);
+      const dx = Math.round(f.rect.x * sx), dy = Math.round(f.rect.y * sy), dw = Math.max(2, Math.round(f.rect.w * sx)), dh = Math.max(2, Math.round(f.rect.h * sy));
+      let s = this.autoScale; if (dw * dh * s * s > 3.2e6) s = Math.sqrt(3.2e6 / (dw * dh));
+      const h = Math.max(2, Math.round(dh * s)), w = Math.max(2, Math.round(h * f.aspect));
+      if (!f.P || !f.P.scene || f.P.w !== w || f.P.h !== h) { this._free(f.P); f.P = this._pipe(w, h, true); this._dirty = true; }
+      f.src = [dx, dy, dw, dh]; f.dst = [dx, c.height - dy - dh, dx + dw, c.height - dy];
+      return { P: f.P, cam: this._offlineCam(f.aspect, 1), dst: f.dst };
+    }
+    _vfPresent(vf) {
+      const gl = this.gl, P = vf.P;
+      this._composite(P, P.out.fb, P.w, P.h, false, vf.cam, this.time, !!this.transparent);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, this.canvas.width, this.canvas.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, P.out.fb); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+      gl.blitFramebuffer(0, 0, P.w, P.h, vf.dst[0], vf.dst[1], vf.dst[2], vf.dst[3], gl.COLOR_BUFFER_BIT, gl.LINEAR);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+    /** Start recording the timeline: per frame the pose (drag + momentum), light aim, beam offset, env, animation time and look. */
+    startTimeline({ thumbHeight = 64, thumbEvery = 0.2, maxSeconds = 120 } = {}) {
+      this._rec = { t0: performance.now(), samples: [], thumbs: [], thumbH: thumbHeight, thumbEvery, lastThumb: -1e9, max: maxSeconds };
+      this._recPush(0, this._pose());
+      return true;
+    }
+    isRecording() { return !!this._rec; }
+    /** Stop recording → { duration, samples, thumbs: [{ t, canvas }], aspect } or null. */
+    stopTimeline() {
+      const R = this._rec; if (!R) return null; this._rec = null;
+      const t = Math.min(R.max, (performance.now() - R.t0) / 1000); this._rec = R; this._recPush(t, this._pose()); this._rec = null;
+      const S = R.samples;
+      return { version: 1, duration: S[S.length - 1].t, samples: S, thumbs: R.thumbs, aspect: this._vf ? this._vf.aspect : this.canvas.width / this.canvas.height };
+    }
+    _lookKey() { return this.material + '|' + this.theme + '|' + this.lightMode; }
+    _setLookKey(k) { if (!k || k === this._lookKey()) return; const [m, t, l] = k.split('|'); this.setMaterial(m); this.setTheme(t); this.setLightMode(l); }
+    _recPush(t, pose) {
+      const S = this._rec.samples, p = S[S.length - 1];
+      if (p && t <= p.t + 1e-4) return;
+      let ang = pose.ang; if (p) ang = p.ang + Math.atan2(Math.sin(ang - p.ang), Math.cos(ang - p.ang)); // continuous for interpolation
+      S.push({ t, yaw: pose.yaw, pitch: pose.pitch, ang, off: this.aimOff || 0, env: this.envYaw, time: this.time, look: this._lookKey() });
+    }
+    _recFrame(pose) { // called right after a live frame was presented
+      const R = this._rec, t = (performance.now() - R.t0) / 1000; if (t > R.max) return;
+      this._recPush(t, pose);
+      if (t - R.lastThumb >= R.thumbEvery) { const cv = this._grabThumb(R.thumbH); if (cv) { R.lastThumb = t; R.thumbs.push({ t, canvas: cv }); } }
+    }
+    _grabThumb(th) { // only valid in the same task as the frame was drawn (preserveDrawingBuffer is off)
+      const c = this.canvas, f = this._vf; const [sx, sy, sw, sh] = f && f.src ? f.src : [0, 0, c.width, c.height];
+      const cv = document.createElement('canvas'); cv.height = th; cv.width = Math.max(1, Math.round(th * sw / sh));
+      try { cv.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, cv.width, cv.height); } catch (e) { return null; }
+      return cv;
+    }
+    /** Timeline state at time t (s): cubic Hermite between recorded frames (non-uniform spacing), so any fps resamples smoothly. */
+    sampleTimeline(tl, t) {
+      const S = tl.samples, n = S.length; if (!n) return null;
+      if (n === 1 || t <= S[0].t) return { ...S[0] }; if (t >= S[n - 1].t) return { ...S[n - 1] };
+      let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m].t <= t) lo = m; else hi = m; }
+      const a = S[lo], b = S[hi], p = S[lo - 1] || a, q = S[hi + 1] || b, dt = b.t - a.t, u = (t - a.t) / dt;
+      const u2 = u * u, u3 = u2 * u, h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+      const o = { t, look: a.look, time: a.time + (b.time - a.time) * u };
+      for (const k of ['yaw', 'pitch', 'ang', 'off', 'env']) {
+        const m0 = (b[k] - p[k]) / ((b.t - p.t) || dt) * dt, m1 = (q[k] - a[k]) / ((q.t - a.t) || dt) * dt;
+        o[k] = h00 * a[k] + h10 * m0 + h01 * b[k] + h11 * m1;
+      }
+      o.pitch = clamp(o.pitch, -1.45, 1.45);
+      return o;
+    }
+    /** Replay a timeline live in the canvas (the preview). Live pose / light / look are saved here and restored by stopReplay(). */
+    playTimeline(tl, { start = 0, end = tl.duration, t = start, playing = true } = {}) {
+      if (!this._replay) this._replaySave = { rot: { ...this.rot }, aim: { ...this.aim }, target: { ...this.target }, aimOff: this.aimOff, bestOff: this._bestOff, envYaw: this.envYaw, envYawT: this.envYawT, time: this.time, pointer: this.pointer, lastPointerT: this.lastPointerT, look: this._lookKey() };
+      this._replay = { tl, start, end, t, playing }; this._dirty = true;
+    }
+    /** Update the replay: { t, start, end, playing } (any subset). Emits 'replay' { t, playing } every frame while replaying. */
+    setReplay(o = {}) {
+      const r = this._replay; if (!r) return;
+      const d = r.tl.duration;
+      if (o.start != null) r.start = clamp(o.start, 0, d); if (o.end != null) r.end = clamp(o.end, r.start, d);
+      if (o.t != null) r.t = clamp(o.t, 0, d); if (o.playing != null) r.playing = !!o.playing;
+      if (r.playing && (r.t < r.start || r.t >= r.end)) r.t = r.start;
+    }
+    getReplay() { const r = this._replay; return r ? { t: r.t, start: r.start, end: r.end, playing: r.playing } : null; }
+    stopReplay() {
+      if (!this._replay) return; this._replay = null; const s = this._replaySave; this._replaySave = null; if (!s) return;
+      Object.assign(this.rot, s.rot); Object.assign(this.aim, s.aim); Object.assign(this.target, s.target);
+      this.aimOff = s.aimOff; this._bestOff = s.bestOff; this.envYaw = s.envYaw; this.envYawT = s.envYawT; this.time = s.time;
+      this.pointer = s.pointer; this.lastPointerT = s.lastPointerT; this._setLookKey(s.look); this._bestAng = null; this._dirty = true;
+    }
+    _replayStep(dt) { // replaces _updateTargets + spin integration while replaying; returns the live camera
+      const r = this._replay;
+      if (r.playing) { r.t += dt; if (r.t >= r.end || r.t < r.start) r.t = r.start; }
+      const s = this.sampleTimeline(r.tl, r.t);
+      this._setLookKey(s.look);
+      const R = this.rot; R.yaw = s.yaw; R.pitch = s.pitch; R.vy = 0; R.vp = 0; R.reset = false;
+      this.aim.yaw = 0; this.aim.pitch = 0; this.aim.ang = s.ang;
+      this.aimOff = s.off; this._bestOff = s.off; this.envYaw = s.env; this.time = s.time;
+      this._emit('replay', { t: r.t, playing: r.playing });
+      return this._insetCam(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1);
+    }
+    /**
+     * Render [start, end] (s) of a timeline offline → H.264 MP4 Blob. The timeline is resampled at exactly `fps`; every frame is fully
+     * antialiased (`spp` samples) and framed like setFrameAspect(aspect) / renderStill({ aspect }), so the clip is smooth however
+     * laggy the live session was. width + aspect (height follows) or width + height. onProgress(fraction, { frame, frames });
+     * cancelRender() aborts with an AbortError.
+     */
+    async renderTimeline({ timeline, start = 0, end, width = 1080, height, aspect, fps = 60, spp = 8, onProgress } = {}) {
+      const tl = timeline; if (!tl || !tl.samples || !tl.samples.length) throw new Error('Empty timeline.');
+      end = clamp(end == null ? tl.duration : end, 0, tl.duration); start = clamp(start, 0, end);
+      if (aspect > 0 && !height) height = width / aspect;
+      const ev = (v) => clamp(Math.round(v / 2) * 2, 16, Math.min(this.maxTex, 8192));
+      const w = ev(width), h = ev(height || width), cam = this._offlineCam(aspect > 0 ? aspect : w, aspect > 0 ? 1 : h);
+      const frames = Math.max(1, Math.round((end - start) * fps));
+      const keep = { aimOff: this.aimOff, envYaw: this.envYaw, look: this._lookKey() };
+      try {
+        return await this._encodeFrames({ w, h, fps, frames, onProgress, render: (P, f) => {
+          const s = this.sampleTimeline(tl, start + f / fps);
+          this._setLookKey(s.look); this.aimOff = s.off; this.envYaw = s.env;
+          return this._offlineFrame(P, { yaw: s.yaw, pitch: s.pitch, ang: s.ang }, cam, spp, s.time, false);
+        } });
+      } finally { this._setLookKey(keep.look); this.aimOff = keep.aimOff; this.envYaw = keep.envYaw; this._dirty = true; }
     }
   }
   SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
@@ -3179,6 +3577,448 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 })(typeof window !== 'undefined' ? window : this);
 
 ;
+/* Spectra — src/camera.js
+ * Camera mode: Photo / Video / Loop, a shutter, an aspect-ratio viewfinder, resolution presets, transparent photos,
+ * a recording pill and a preview sheet with an iOS-style filmstrip trimmer.
+ *
+ * Camera UX adapted from 3dsvg by Renato Costa, MIT (packages/web/src/components/export-bar.tsx: ShutterButton,
+ * ViewfinderOverlay, camera bar → recording pill → preview; video-trimmer.tsx: filmstrip, start/end handles, scrub playhead).
+ *
+ * The capture pipeline is Spectra's own. Nothing is screen-recorded or cropped:
+ *  - the viewfinder IS the output: engine.setFrameAspect() renders the live view only inside the frame with the offline camera;
+ *  - Photo → engine.renderStill({ aspect, width, height }) at full quality;
+ *  - Video → engine.startTimeline() records what drives the image each frame; the preview replays it live; Download renders the
+ *    trimmed range offline at a fixed fps (engine.renderTimeline) to H.264 MP4: frame-perfect however laggy the session was;
+ *  - Loop → the seamless 6 s loop (engine.renderVideo) at the chosen aspect and resolution.
+ *
+ * window.SpectraCamera = { init(engine, api) }   api = SpectraUI's { toast, saveBlob, relayout, close, isHidden }
+ */
+(function (global) {
+  'use strict';
+
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const ASPECTS = { free: 0, '1:1': 1, '4:5': 4 / 5, '9:16': 9 / 16, '16:9': 16 / 9 };
+  const RES = [{ label: '1080p', s: 1080 }, { label: '2K', s: 1440 }, { label: '4K', s: 2160 }]; // short edge, like 1080p / 1440p / 2160p
+  const MAX_REC = 60, MIN_TRIM = 0.3, LOOP_SECONDS = 6, LOOP_FPS = 30;
+  const NOTES = {
+    photo: 'Rendered offline at full quality, framed exactly as you see it.',
+    video: 'Steer and spin while recording. Every frame is re-rendered offline, so it’s smooth even if this view stutters.',
+    loop: 'A seamless 6-second loop of the light, rendered offline.',
+  };
+  const fmt = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1); };
+  const stamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); };
+  const isAbort = (e) => e && (e.name === 'AbortError' || /cancel|abort/i.test(e.message || ''));
+
+  function init(engine, api) {
+    api = api || {};
+    const root = $('#sp-root'), ui = $('#sp-ui'), canvas = $('#spectra-canvas'), dock = $('#sp-dock');
+    const camBtn = $('#sp-camera'), cam = $('#sp-cam');
+    if (!cam || !engine || typeof engine.setFrameAspect !== 'function') { if (camBtn) camBtn.hidden = true; return null; }
+    const vf = $('#sp-vf'), vfSize = $('#sp-vf-size'), flash = $('#sp-vf-flash'), vfImg = $('#sp-vf-img'), vfVideo = $('#sp-vf-video');
+    const bar = $('#sp-cam-bar'), aspectGroup = $('#sp-cam-aspect'), modeGroup = $('#sp-cam-modes'), resBtn = $('#sp-cam-res');
+    const shutter = $('#sp-shutter'), closeBtn = $('#sp-cam-close'), clearBtn = $('#sp-cam-clear'), note = $('#sp-cam-note');
+    const rec = $('#sp-cam-rec'), recTime = $('#sp-rec-time'), recStop = $('#sp-rec-stop');
+    const busy = $('#sp-cam-busy');
+    const sheet = $('#sp-sheet'), sheetTitle = $('#sp-sheet-title'), sheetMeta = $('#sp-sheet-meta'), sheetOpts = $('#sp-sheet-opts'), sheetNote = $('#sp-sheet-note');
+    const sheetProg = $('#sp-sheet-prog'), actions = $('#sp-sheet-actions'), retakeBtn = $('#sp-retake'), dlBtn = $('#sp-dl'), fpsGroup = $('#sp-cam-fps');
+    const trim = $('#sp-trim'), strip = $('#sp-trim-strip'), film = $('#sp-trim-film'), playBtn = $('#sp-trim-play');
+    const hS = $('#sp-trim-hs'), hE = $('#sp-trim-he'), head = $('#sp-trim-head'), sel = $('#sp-trim-sel'), dimL = $('#sp-trim-dim-l'), dimR = $('#sp-trim-dim-r');
+    const Engine = global.SpectraEngine || engine.constructor || {};
+    const canVideo = () => { try { return !!Engine.canRenderVideo; } catch (e) { return false; } };
+    const reduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+    const toast = (m, k, ms) => { if (api.toast) api.toast(m, k, ms); };
+    // checkerboard under the canvas, inside the frame, for transparent photos
+    const checker = document.createElement('div'); checker.className = 'sp-cam-checker'; checker.hidden = true; checker.setAttribute('aria-hidden', 'true');
+    root.insertBefore(checker, canvas);
+
+    const st = {
+      open: false, state: 'bar', mode: 'photo', aspect: 'free', res: { photo: 1, video: 0, loop: 0 }, clear: false,
+      frame: null, reserve: 0, prevTransparent: false, suspended: false, session: 0,
+      tl: null, trim: [0, 0], fps: 60, blob: null, url: null, timer: 0, recT0: 0, rendering: false, hinted: false,
+    };
+
+    /* ───── sizes & framing ───── */
+    function dims(mode) {
+      mode = mode || st.mode;
+      const a = st.frame ? st.frame.aspect : 1, S = RES[st.res[mode]].s;
+      let w = a >= 1 ? S * a : S, h = a >= 1 ? S : S / a;
+      const cap = mode === 'photo' ? Math.min(engine.maxTex || 8192, 8192) : 4096; // H.264 encoders top out around 4096
+      const k = Math.min(1, cap / Math.max(w, h)); w *= k; h *= k;
+      if (mode === 'photo') return [Math.round(w), Math.round(h)];
+      return [Math.max(2, Math.round(w / 2) * 2), Math.max(2, Math.round(h / 2) * 2)];
+    }
+    function box() {
+      const W = canvas.clientWidth || window.innerWidth, H = canvas.clientHeight || window.innerHeight, narrow = W <= 560;
+      const side = narrow ? 14 : 28, top = narrow ? 58 : 64;
+      return { x: side, y: top, w: W - 2 * side, h: H - top - st.reserve - 14 };
+    }
+    function measureReserve() {
+      const el = st.state === 'preview' ? sheet : st.state === 'bar' ? bar : null; // recording / rendering keep the frame still
+      if (!el || el.hidden) return;
+      const r = el.getBoundingClientRect(), rr = canvas.getBoundingClientRect();
+      st.reserve = Math.max(0, rr.bottom - r.top);
+    }
+    function fit() {
+      if (!st.open) return;
+      measureReserve();
+      const f = engine.setFrameAspect(ASPECTS[st.aspect], box()); st.frame = f; if (!f) return;
+      const css = 'left:' + f.x + 'px;top:' + f.y + 'px;width:' + f.w + 'px;height:' + f.h + 'px';
+      vf.style.cssText = css; checker.style.cssText = css;
+      const d = dims(); vfSize.textContent = d[0] + ' × ' + d[1];
+      resBtn.textContent = RES[st.res[st.mode]].label;
+      resBtn.setAttribute('aria-label', 'Resolution ' + RES[st.res[st.mode]].label + ', ' + d[0] + ' by ' + d[1] + ' pixels');
+      resBtn.title = d[0] + ' × ' + d[1] + ' px · click to change';
+      dock.style.bottom = (st.reserve + 8) + 'px'; // keep toasts above the camera UI
+      if (st.state === 'preview' && st.tl) layoutTrim(true);
+    }
+
+    /* ───── state ───── */
+    function setState(s) {
+      st.state = s;
+      bar.hidden = s !== 'bar'; rec.hidden = s !== 'rec'; busy.hidden = s !== 'busy'; sheet.hidden = s !== 'preview';
+      vf.classList.toggle('is-rec', s === 'rec');
+      fit();
+    }
+    function setMode(m) {
+      if (!NOTES[m]) return;
+      if ((m === 'video' || m === 'loop') && !canVideo()) { toast('This browser can’t encode MP4 video', 'err', 3200); return; }
+      st.mode = m;
+      $$('button[data-mode]', modeGroup).forEach((b) => { const on = b.dataset.mode === m; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+      shutter.dataset.mode = m;
+      shutter.setAttribute('aria-label', m === 'photo' ? 'Take photo' : m === 'video' ? 'Start recording' : 'Render 6-second loop');
+      clearBtn.classList.toggle('is-off', m !== 'photo'); clearBtn.tabIndex = m === 'photo' ? 0 : -1;
+      note.textContent = NOTES[m];
+      applyClear(); fit();
+    }
+    function applyClear() {
+      const on = st.open && st.mode === 'photo' && st.clear;
+      clearBtn.setAttribute('aria-pressed', String(st.clear));
+      if (typeof engine.setTransparent === 'function') engine.setTransparent(on || (!st.open && st.prevTransparent));
+      checker.hidden = !on;
+    }
+    function setAspect(id) {
+      if (!(id in ASPECTS)) return; st.aspect = id;
+      $$('button[data-aspect]', aspectGroup).forEach((b) => { const on = b.dataset.aspect === id; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+      fit();
+    }
+    function radioKeys(group, attr, setFn) { // arrow keys move within a radiogroup, like the material switch
+      group.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const bs = $$('button[data-' + attr + ']:not(:disabled)', group), i = bs.findIndex((b) => b.getAttribute('aria-checked') === 'true');
+        const n = bs[(i + (e.key === 'ArrowRight' ? 1 : bs.length - 1)) % bs.length]; if (!n) return;
+        e.preventDefault(); setFn(n.dataset[attr]); n.focus();
+      });
+      group.addEventListener('click', (e) => { const b = e.target.closest('button[data-' + attr + ']'); if (b) setFn(b.dataset[attr]); });
+    }
+    radioKeys(aspectGroup, 'aspect', setAspect);
+    radioKeys(modeGroup, 'mode', setMode);
+    radioKeys(fpsGroup, 'fps', (v) => { st.fps = +v; $$('button[data-fps]', fpsGroup).forEach((b) => { const on = +b.dataset.fps === st.fps; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }); updateMeta(); });
+    resBtn.addEventListener('click', () => { st.res[st.mode] = (st.res[st.mode] + 1) % RES.length; fit(); });
+    clearBtn.addEventListener('click', () => { st.clear = !st.clear; applyClear(); });
+    if (!canVideo()) $$('button[data-mode="video"], button[data-mode="loop"]', modeGroup).forEach((b) => { b.disabled = true; b.title = 'This browser can’t encode MP4 video'; });
+
+    /* ───── open / close ───── */
+    function openCam() {
+      if (st.open) return;
+      if (api.close) api.close(true);
+      st.open = true; st.session++; st.prevTransparent = !!engine.transparent;
+      cam.hidden = false; ui.classList.add('is-cam'); camBtn.setAttribute('aria-expanded', 'true');
+      setMode(st.mode); setAspect(st.aspect); setState('bar');
+      shutter.focus({ preventScroll: true });
+      if (!st.hinted) { st.hinted = true; toast('Camera · Esc to close', null, 1800); }
+    }
+    function closeCam(refocus) {
+      if (!st.open) return;
+      if (st.state === 'rec') stopRecTimer(), engine.stopTimeline();
+      if (st.rendering) engine.cancelRender();
+      clearPreview();
+      st.open = false; st.session++;
+      engine.setFrameAspect(null); applyClear();
+      cam.hidden = true; checker.hidden = true; ui.classList.remove('is-cam'); dock.style.bottom = '';
+      camBtn.setAttribute('aria-expanded', 'false');
+      if (api.relayout) api.relayout();
+      if (refocus) camBtn.focus({ preventScroll: true });
+    }
+    camBtn.addEventListener('click', () => (st.open ? closeCam(true) : openCam()));
+    closeBtn.addEventListener('click', () => closeCam(true));
+
+    /* ───── photo ───── */
+    function doFlash() {
+      if (reduce.matches) return;
+      flash.classList.remove('is-on'); void flash.offsetWidth; flash.classList.add('is-on');
+    }
+    async function takePhoto() {
+      if (st.rendering) return;
+      const session = st.session, [w, h] = dims('photo'), aspect = st.frame.aspect, clear = st.clear;
+      st.rendering = true; shutter.classList.add('is-busy'); shutter.setAttribute('aria-busy', 'true');
+      doFlash();
+      try {
+        const blob = await engine.renderStill({ width: w, height: h, aspect, samples: 32, transparent: clear });
+        if (session !== st.session || !blob) return;
+        showMedia('photo', blob, { w, h, clear });
+      } catch (e) {
+        if (isAbort(e)) toast('Cancelled'); else { console.error('[Spectra camera] photo', e); toast('Photo failed', 'err'); }
+      } finally { st.rendering = false; shutter.classList.remove('is-busy'); shutter.removeAttribute('aria-busy'); }
+    }
+
+    /* ───── loop (the seamless 6 s export, framed by the viewfinder) ───── */
+    const busyLabel = $('#sp-busy-label'), busyPct = $('#sp-busy-pct'), busyFill = $('#sp-busy-fill');
+    function setBusyProg(f, label) {
+      f = clamp(f || 0, 0, 1); busyFill.style.setProperty('--p', f.toFixed(4)); busyPct.textContent = Math.round(f * 100) + '%';
+      busy.querySelector('.sp-prog-bar').setAttribute('aria-valuenow', String(Math.round(f * 100))); if (label) busyLabel.textContent = label;
+    }
+    async function renderLoop() {
+      if (st.rendering || !canVideo()) return;
+      const session = st.session, [w, h] = dims('loop');
+      st.rendering = true; setState('busy'); setBusyProg(0, 'Rendering loop'); $('#sp-busy-cancel').focus({ preventScroll: true });
+      try {
+        const blob = await engine.renderVideo({ width: w, height: h, fps: LOOP_FPS, seconds: LOOP_SECONDS, spp: 8, onProgress: (f) => setBusyProg(f) });
+        if (session !== st.session || !blob) return;
+        showMedia('loop', blob, { w, h });
+      } catch (e) {
+        if (session !== st.session) return;
+        if (isAbort(e)) toast('Render cancelled'); else { console.error('[Spectra camera] loop', e); toast('MP4 render failed', 'err'); }
+        setState('bar'); shutter.focus({ preventScroll: true });
+      } finally { st.rendering = false; }
+    }
+    $('#sp-busy-cancel').addEventListener('click', () => engine.cancelRender());
+
+    /* ───── preview of a finished file (photo / loop) ───── */
+    function showMedia(kind, blob, o) {
+      clearPreview();
+      st.blob = blob; st.url = URL.createObjectURL(blob); st.kind = kind; st.file = { w: o.w, h: o.h };
+      const el = kind === 'photo' ? vfImg : vfVideo;
+      el.classList.toggle('is-clear', !!o.clear); el.src = st.url; el.hidden = false;
+      if (kind === 'loop') { vfVideo.controls = !!reduce.matches; if (!reduce.matches) vfVideo.play().catch(() => {}); }
+      if (typeof engine.suspend === 'function') { engine.suspend(); st.suspended = true; } // the preview is the file itself
+      sheetTitle.textContent = kind === 'photo' ? 'Photo' : 'Loop';
+      sheetMeta.textContent = o.w + ' × ' + o.h + (kind === 'photo' ? ' · PNG' + (o.clear ? ' · transparent' : '') : ' · ' + LOOP_SECONDS + ' s · ' + LOOP_FPS + ' fps · MP4');
+      trim.hidden = true; sheetOpts.hidden = true; sheetProg.hidden = true; actions.hidden = false;
+      retakeBtn.textContent = kind === 'photo' ? 'Retake' : 'Back';
+      dlBtn.textContent = kind === 'photo' ? 'Download PNG' : 'Download MP4'; dlBtn.disabled = false;
+      setState('preview'); dlBtn.focus({ preventScroll: true });
+    }
+    function clearPreview() {
+      if (st.url) { URL.revokeObjectURL(st.url); st.url = null; }
+      st.blob = null; st.kind = null;
+      vfImg.hidden = true; vfImg.removeAttribute('src');
+      try { vfVideo.pause(); } catch (e) { /* noop */ }
+      vfVideo.hidden = true; vfVideo.removeAttribute('src'); try { vfVideo.load(); } catch (e) { /* noop */ }
+      if (st.tl) { engine.stopReplay(); st.tl = null; }
+      if (st.suspended) { st.suspended = false; if (typeof engine.resume === 'function') engine.resume(); }
+    }
+    function retake() {
+      if (st.rendering) { engine.cancelRender(); return; }
+      clearPreview(); setState('bar'); shutter.focus({ preventScroll: true });
+    }
+    retakeBtn.addEventListener('click', retake);
+
+    /* ───── video: record a timeline ───── */
+    function stopRecTimer() { clearInterval(st.timer); st.timer = 0; }
+    function startRec() {
+      if (st.rendering || !canVideo()) return;
+      engine.startTimeline({ maxSeconds: MAX_REC + 1, thumbHeight: 72, thumbEvery: 0.15 });
+      st.recT0 = performance.now(); recTime.textContent = fmt(0);
+      setState('rec'); recStop.focus({ preventScroll: true });
+      st.timer = setInterval(() => {
+        const t = (performance.now() - st.recT0) / 1000; recTime.textContent = fmt(Math.min(t, MAX_REC));
+        if (t >= MAX_REC) stopRec();
+      }, 100);
+    }
+    function stopRec() {
+      if (st.state !== 'rec') return;
+      stopRecTimer();
+      const tl = engine.stopTimeline();
+      if (!tl || tl.duration < MIN_TRIM) { toast('Too short. Record a little longer.'); setState('bar'); shutter.focus({ preventScroll: true }); return; }
+      clearPreview();
+      st.tl = tl; st.trim = [0, tl.duration]; st.kind = 'video';
+      engine.playTimeline(tl, { start: 0, end: tl.duration, playing: !reduce.matches });
+      sheetTitle.textContent = 'Video';
+      trim.hidden = false; sheetOpts.hidden = false; sheetProg.hidden = true; actions.hidden = false;
+      retakeBtn.textContent = 'Retake'; dlBtn.textContent = 'Download MP4'; dlBtn.disabled = !canVideo();
+      updateMeta();
+      setState('preview'); // fit() → layoutTrim()
+      drawFilm(); syncPlay();
+      dlBtn.focus({ preventScroll: true });
+    }
+    recStop.addEventListener('click', stopRec);
+    function updateMeta() {
+      if (st.kind !== 'video' || !st.tl) return;
+      const [w, h] = dims('video'), len = st.trim[1] - st.trim[0];
+      sheetMeta.textContent = w + ' × ' + h + ' · ' + len.toFixed(1) + ' s · ' + st.fps + ' fps · MP4';
+      sheetNote.textContent = 'Download renders all ' + Math.max(1, Math.round(len * st.fps)) + ' frames offline: smooth even if the live view stuttered.';
+    }
+
+    /* ───── trimmer (filmstrip, handles, scrub playhead) ───── */
+    const HW = 14;
+    function trackW() { return Math.max(1, strip.clientWidth - 2 * HW); }
+    const tToX = (t) => HW + (t / (st.tl ? st.tl.duration : 1)) * trackW();
+    const xToT = (clientX) => { const r = strip.getBoundingClientRect(); return clamp((clientX - r.left - HW) / trackW(), 0, 1) * st.tl.duration; };
+    function drawFilm() {
+      const tl = st.tl; if (!tl) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2), W = trackW(), H = strip.clientHeight || 48;
+      film.width = Math.round(W * dpr); film.height = Math.round(H * dpr);
+      const g = film.getContext('2d'); g.clearRect(0, 0, film.width, film.height);
+      const th = tl.thumbs || []; if (!th.length) return;
+      const a = th[0].canvas.width / th[0].canvas.height, slot = Math.max(16, H * a), n = Math.ceil(W / slot);
+      let j = 0;
+      for (let i = 0; i < n; i++) {
+        const t = clamp((i + 0.5) * slot / W, 0, 1) * tl.duration;
+        while (j < th.length - 1 && Math.abs(th[j + 1].t - t) <= Math.abs(th[j].t - t)) j++;
+        const c = th[j].canvas, sw = c.width, sh = c.height, s = Math.max(slot / sw, H / sh); // cover
+        const cw = slot / s, ch = H / s;
+        g.drawImage(c, (sw - cw) / 2, (sh - ch) / 2, cw, ch, Math.round(i * slot * dpr), 0, Math.ceil(slot * dpr), film.height);
+      }
+    }
+    function layoutTrim(redraw) {
+      if (!st.tl) return;
+      const [s, e] = st.trim, xs = tToX(s), xe = tToX(e), W = strip.clientWidth, d = st.tl.duration;
+      hS.style.left = (xs - HW) + 'px'; hE.style.left = xe + 'px';
+      sel.style.left = (xs - HW) + 'px'; sel.style.width = (xe - xs + 2 * HW) + 'px';
+      dimL.style.left = HW + 'px'; dimL.style.width = Math.max(0, xs - HW) + 'px';
+      dimR.style.left = xe + 'px'; dimR.style.width = Math.max(0, W - HW - xe) + 'px';
+      [[hS, s, 0, e - MIN_TRIM], [hE, e, s + MIN_TRIM, d]].forEach(([h, v, mn, mx]) => {
+        h.setAttribute('aria-valuemin', mn.toFixed(1)); h.setAttribute('aria-valuemax', mx.toFixed(1));
+        h.setAttribute('aria-valuenow', v.toFixed(1)); h.setAttribute('aria-valuetext', v.toFixed(1) + ' seconds');
+      });
+      $('#sp-trim-t0').textContent = s.toFixed(1) + 's'; $('#sp-trim-t1').textContent = e.toFixed(1) + 's';
+      $('#sp-trim-len').textContent = (e - s).toFixed(1) + 's';
+      const r = engine.getReplay && engine.getReplay(); if (r) placeHead(r.t);
+      if (redraw) drawFilm();
+      updateMeta();
+    }
+    function placeHead(t) { head.style.transform = 'translateX(' + tToX(clamp(t, st.trim[0], st.trim[1])) + 'px)'; }
+    function syncPlay() {
+      const r = engine.getReplay && engine.getReplay(), playing = !!(r && r.playing);
+      playBtn.classList.toggle('is-paused', !playing); playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    }
+    function setTrim(s, e) {
+      const d = st.tl.duration;
+      s = clamp(s, 0, Math.max(0, d - MIN_TRIM)); e = clamp(e, Math.min(d, s + MIN_TRIM), d);
+      st.trim = [s, e]; engine.setReplay({ start: s, end: e }); layoutTrim(false);
+    }
+    const seek = (t) => { engine.setReplay({ t }); placeHead(t); };
+    function togglePlay(force) {
+      const r = engine.getReplay(); if (!r) return;
+      const p = typeof force === 'boolean' ? force : !r.playing;
+      engine.setReplay({ playing: p, t: p && (r.t < st.trim[0] || r.t >= st.trim[1] - 0.02) ? st.trim[0] : r.t }); syncPlay();
+    }
+    playBtn.addEventListener('click', () => togglePlay());
+    engine.on('replay', (r) => { if (st.state === 'preview' && st.tl) placeHead(r.t); });
+    let drag = null;
+    strip.addEventListener('pointerdown', (e) => {
+      if (!st.tl || st.rendering || e.button > 0) return;
+      e.preventDefault();
+      const h = e.target.closest('[data-handle]'), r = engine.getReplay();
+      drag = { kind: h ? h.dataset.handle : 'scrub', id: e.pointerId, was: !!(r && r.playing) };
+      engine.setReplay({ playing: false }); syncPlay();
+      try { strip.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+      if (h) h.focus({ preventScroll: true }); else seek(clamp(xToT(e.clientX), st.trim[0], st.trim[1]));
+    });
+    strip.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const t = xToT(e.clientX);
+      if (drag.kind === 'start') { setTrim(t, st.trim[1]); seek(st.trim[0]); }
+      else if (drag.kind === 'end') { setTrim(st.trim[0], t); seek(st.trim[1]); }
+      else seek(clamp(t, st.trim[0], st.trim[1]));
+    });
+    const endDrag = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag; drag = null;
+      if (d.kind !== 'scrub') seek(st.trim[0]); // like iOS: after trimming, play from the new start
+      if (d.was) togglePlay(true); else syncPlay();
+    };
+    strip.addEventListener('pointerup', endDrag); strip.addEventListener('pointercancel', endDrag);
+    [hS, hE].forEach((h) => h.addEventListener('keydown', (e) => {
+      if (!st.tl) return;
+      const step = e.shiftKey ? 1 : 0.1, isS = h === hS; let v = isS ? st.trim[0] : st.trim[1];
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') v -= step; else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') v += step;
+      else if (e.key === 'Home') v = 0; else if (e.key === 'End') v = st.tl.duration; else return;
+      e.preventDefault();
+      if (isS) setTrim(v, st.trim[1]); else setTrim(st.trim[0], v);
+      seek(isS ? st.trim[0] : st.trim[1]);
+    }));
+
+    /* ───── download ───── */
+    const spPct = $('#sp-sheet-prog-pct'), spFill = $('#sp-sheet-prog-fill'), spLabel = $('#sp-sheet-prog-label');
+    function setSheetProg(f, label) {
+      f = clamp(f || 0, 0, 1); spFill.style.setProperty('--p', f.toFixed(4)); spPct.textContent = Math.round(f * 100) + '%';
+      sheetProg.querySelector('.sp-prog-bar').setAttribute('aria-valuenow', String(Math.round(f * 100))); if (label) spLabel.textContent = label;
+    }
+    async function download() {
+      if (st.kind === 'photo' || st.kind === 'loop') {
+        if (!st.blob) return;
+        const f = st.file || {};
+        await (api.saveBlob ? api.saveBlob(st.blob, 'spectra-' + (st.kind === 'loop' ? 'loop-' : '') + f.w + 'x' + f.h + '-' + stamp() + (st.kind === 'photo' ? '.png' : '.mp4')) : null);
+        return;
+      }
+      if (st.kind !== 'video' || !st.tl || st.rendering) return;
+      const session = st.session, [w, h] = dims('video'), tl = st.tl, [s, e] = st.trim, fps = st.fps;
+      const wasPlaying = !!(engine.getReplay() || {}).playing;
+      st.rendering = true; engine.setReplay({ playing: false }); syncPlay();
+      actions.hidden = true; sheetProg.hidden = false; trim.inert = true; sheetOpts.inert = true;
+      setSheetProg(0, 'Rendering'); $('#sp-sheet-cancel').focus({ preventScroll: true });
+      try {
+        const blob = await engine.renderTimeline({ timeline: tl, start: s, end: e, width: w, height: h, aspect: st.frame.aspect, fps, spp: 8,
+          onProgress: (f, i) => setSheetProg(f, i ? 'Rendering frame ' + i.frame + ' / ' + i.frames : null) });
+        if (session !== st.session || !blob) return;
+        setSheetProg(1, 'Saving');
+        if (api.saveBlob) await api.saveBlob(blob, 'spectra-' + w + 'x' + h + '-' + stamp() + '.mp4');
+      } catch (err) {
+        if (session !== st.session) return;
+        if (isAbort(err)) toast('Render cancelled'); else { console.error('[Spectra camera] renderTimeline', err); toast('MP4 render failed', 'err', 4200); }
+      } finally {
+        st.rendering = false;
+        if (session === st.session) {
+          sheetProg.hidden = true; actions.hidden = false; trim.inert = false; sheetOpts.inert = false;
+          if (wasPlaying) togglePlay(true);
+          dlBtn.focus({ preventScroll: true });
+        }
+      }
+    }
+    dlBtn.addEventListener('click', download);
+    $('#sp-sheet-cancel').addEventListener('click', () => engine.cancelRender());
+
+    /* ───── shutter ───── */
+    shutter.addEventListener('click', () => {
+      if (!st.open || st.state !== 'bar') return;
+      if (st.mode === 'photo') takePhoto(); else if (st.mode === 'video') startRec(); else renderLoop();
+    });
+
+    /* ───── keyboard: K toggles, Esc steps back (stop → cancel → retake → close), Space plays/pauses the replay ───── */
+    window.addEventListener('keydown', (e) => {
+      const t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (e.key === 'Escape' && st.open) {
+        if (api.isHidden && api.isHidden()) return; // SpectraUI un-hides first
+        e.preventDefault(); e.stopPropagation();
+        if (st.state === 'rec') stopRec();
+        else if (st.rendering) engine.cancelRender();
+        else if (st.state === 'preview') retake();
+        else closeCam(true);
+        return;
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'k' || e.key === 'K') { e.preventDefault(); e.stopPropagation(); if (st.open) closeCam(true); else openCam(); return; }
+      if (st.open && st.state === 'preview' && st.tl && !st.rendering && (e.key === ' ' || e.code === 'Space')) {
+        if (t && (t.tagName === 'BUTTON' || t.getAttribute('role') === 'slider') && t.matches(':focus-visible') && t.tagName === 'BUTTON') return; // Space activates a focused button
+        e.preventDefault(); e.stopPropagation(); togglePlay();
+      }
+    }, true);
+
+    let rT = 0;
+    window.addEventListener('resize', () => { if (!st.open) return; cancelAnimationFrame(rT); rT = requestAnimationFrame(fit); });
+
+    const inst = { open: openCam, close: closeCam, isOpen: () => st.open, state: () => st.state, setMode, setAspect, _st: st };
+    global.SpectraCamera.instance = inst; // handy for tests / embedding
+    return inst;
+  }
+
+  global.SpectraCamera = { init };
+})(typeof window !== 'undefined' ? window : this);
+
+;
 /* Spectra v2 — src/ui2.js
  * window.SpectraUI = { init(engine, deps) }   deps = { SpectraSDF, SpectraSamples, defaultSample? }
  * Plain browser JS. Binds the minimal UI (wordmark, one pill, two popovers, drop frame, hint, toast)
@@ -3576,6 +4416,7 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 
     /* ───── layout / insets ───── */
     function insets() {
+      if (!pill.offsetParent) return; // pill hidden (camera mode frames the view itself)
       const r = pill.getBoundingClientRect();
       const bottom = Math.max(0, Math.round(window.innerHeight - r.top + 8));
       call('setViewInsets', { right: 0, bottom });
@@ -3601,7 +4442,10 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     }
     if (!engine) toast('Renderer unavailable in this browser', 'err', 6000);
 
-    return { toast, setMaterial, loadFile, loadSample, close, hide: setHidden };
+    const api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
+    // camera mode (src/camera.js): Photo / Video / Loop with viewfinder, trimmer and offline capture
+    if (global.SpectraCamera) { try { api.camera = global.SpectraCamera.init(engine, api); } catch (e) { console.error('[Spectra UI] camera', e); } }
+    return api;
   }
 
   global.SpectraUI = { init };

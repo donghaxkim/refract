@@ -730,6 +730,7 @@
       if (this._bgSrgb !== undefined || this.transparent) this._syncBg();
     }
     _insetCam(W, H) { // CSS-size based framing: centre in free area, fit width on portrait screens
+      if (this._vf) return this._vfCam(W, H); // camera viewfinder
       const r = Math.min(this.ins.r, W * 0.6), b = Math.min(this.ins.b, H * 0.6);
       const k = Math.max(1, (H * 1.15) / Math.max(W - r, 1), H / Math.max(H - b, 1));
       return { cx: -r / W, cy: b / H, k };
@@ -921,23 +922,25 @@
       const dt = Math.min(0.1, (now - this._lastT) / 1000); this._lastT = now;
       this._fpsA += dt; this._fpsN++; if (this._fpsA > 0.5) { this._emit('fps', Math.round(this._fpsN / this._fpsA)); this._fpsA = 0; this._fpsN = 0; }
       if (!this.paused) this.time += dt;
-      const cam = this._updateTargets(dt);
+      const cam = this._replay ? this._replayStep(dt) : this._updateTargets(dt);
+      const vf = this._vf ? this._vfPipe() : null, rcam = vf ? vf.cam : cam; // camera viewfinder: render only the frame, offline camera
       // spin inertia / reset
       const r = this.rot;
-      if (r.reset) { const k = 1 - Math.exp(-dt * 6); const ty = Math.round(r.yaw / (2 * Math.PI)) * 2 * Math.PI; r.yaw += (ty - r.yaw) * k; r.pitch += (0 - r.pitch) * k; if (Math.abs(ty - r.yaw) < 1e-4 && Math.abs(r.pitch) < 1e-4) { r.yaw = 0; r.pitch = 0; r.reset = false; } }
+      if (this._replay) { /* timeline replay drives the pose */ }
+      else if (r.reset) { const k = 1 - Math.exp(-dt * 6); const ty = Math.round(r.yaw / (2 * Math.PI)) * 2 * Math.PI; r.yaw += (ty - r.yaw) * k; r.pitch += (0 - r.pitch) * k; if (Math.abs(ty - r.yaw) < 1e-4 && Math.abs(r.pitch) < 1e-4) { r.yaw = 0; r.pitch = 0; r.reset = false; } }
       else if (!r.drag && (Math.abs(r.vy) > 1e-4 || Math.abs(r.vp) > 1e-4)) { r.yaw += r.vy * dt; r.pitch = clamp(r.pitch + r.vp * dt, -1.35, 1.35); const d = Math.exp(-dt * 2.6); r.vy *= d; r.vp *= d; if (Math.abs(r.vy) < 1e-3) r.vy = 0; if (Math.abs(r.vp) < 1e-3) r.vp = 0; }
       const pose = this._pose(); const Rm = rotYX(pose.yaw, pose.pitch);
       const rotKey = pose.yaw.toFixed(4) + ',' + pose.pitch.toFixed(4);
-      if (this.field && (this._bestAng == null || Math.abs(this.aim.ang - this._bestAng) > 0.01 || rotKey !== this._bestRot || this._dirty)) {
+      if (this.field && !this._replay && (this._bestAng == null || Math.abs(this.aim.ang - this._bestAng) > 0.01 || rotKey !== this._bestRot || this._dirty)) {
         if (!this._bestT || now - this._bestT > 60 || this._dirty) { this._bestT = now; this._bestAng = this.aim.ang; this._bestRot = rotKey; this._bestOff = this._bestOffset(this.aim.ang, Rm); }
       }
       if (this._bestOff != null) { this.aimOff = (this.aimOff ?? this._bestOff) + (this._bestOff - (this.aimOff ?? this._bestOff)) * (1 - Math.exp(-dt * 1.4)); }
-      const key = [(this.aimOff || 0).toFixed(4), this.envYaw.toFixed(4), this.aim.ang.toFixed(4), pose.yaw.toFixed(4), pose.pitch.toFixed(4), cam.cx.toFixed(4), cam.cy.toFixed(4), cam.k.toFixed(4)].join('|');
+      const key = [(this.aimOff || 0).toFixed(4), this.envYaw.toFixed(4), this.aim.ang.toFixed(4), pose.yaw.toFixed(4), pose.pitch.toFixed(4), rcam.cx.toFixed(4), rcam.cy.toFixed(4), rcam.k.toFixed(4)].join('|');
       const moving = key !== this._key; this._key = key;
       this._ft = this._ft * 0.9 + dt * 1000 * 0.1;
       if (moving && now - this._scaleT > 800) { this._scaleT = now; if (this._ft > 24 && this.autoScale > 0.55) { this.autoScale *= 0.85; this._resizeMain(); } else if (this._ft < 19 && this.autoScale < 1) { this.autoScale = Math.min(1, this.autoScale * 1.1); this._resizeMain(); } }
       if (!moving && this.autoScale < 1 && now - this._scaleT > 500) { this.autoScale = 1; this._scaleT = now; this._resizeMain(); }
-      const P = this.main; const target = 24;
+      const P = vf ? vf.P : this.main; const target = 24;
       if (moving || this._dirty || this.samples < target) {
         if (moving || this._dirty) this._uploadBeam(this._buildBeam(pose.ang, Rm));
         let blend;
@@ -945,11 +948,12 @@
         else if (moving) { blend = this.samples === 0 ? 1 : 0.35; this.samples = 1; }
         else blend = 1 / (this.samples + 1);
         this.frame++;
-        this._sample(P, pose, blend, cam, this.frame, moving ? 0.0 : (this.frame * 0.6180339887) % 1); // jitter always on: motion stays antialiased
-        if (moving && this._ft < 12) { this.frame++; this._sample(P, pose, 0.3, cam, this.frame, 0.0); } // spare GPU time → a second AA sample
+        this._sample(P, pose, blend, rcam, this.frame, moving ? 0.0 : (this.frame * 0.6180339887) % 1); // jitter always on: motion stays antialiased
+        if (moving && this._ft < 12) { this.frame++; this._sample(P, pose, 0.3, rcam, this.frame, 0.0); } // spare GPU time → a second AA sample
         this.samples++;
       }
-      this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, !!this.transparent);
+      if (vf) this._vfPresent(vf); else this._composite(P, null, this.canvas.width, this.canvas.height, false, cam, this.time, !!this.transparent);
+      if (this._rec) this._recFrame(pose);
     }
     // ── offline rendering
     _wait() { const gl = this.gl; const s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); return new Promise(r => { const p = () => { if (gl.clientWaitSync(s, 0, 0) === gl.TIMEOUT_EXPIRED) { setTimeout(p, 2); return; } gl.deleteSync(s); r(); }; p(); }); }
@@ -967,13 +971,17 @@
     _offlineCam(w, h) { // same framing as the live view, but without UI insets
       return { cx: 0, cy: 0, k: Math.max(1, (h * 1.15) / w) };
     }
-    async renderStill({ width, height, samples = 32, onProgress, transparent = false } = {}) {
+    /** PNG still, rendered offline at full quality. With `aspect` (w/h) it is framed exactly like the camera viewfinder
+     *  (setFrameAspect(aspect)); give width or height and the other side follows. Without aspect: the view framing for width×height. */
+    async renderStill({ width, height, aspect, samples = 32, onProgress, transparent = false } = {}) {
       if (this.busy) throw new Error('A render is already running.');
+      if (aspect > 0) { if (width && !height) height = width / aspect; else if (height && !width) width = height * aspect; }
       const w = clamp(Math.round(width || this.canvas.width), 16, this.maxTex), h = clamp(Math.round(height || this.canvas.height), 16, this.maxTex);
       this.busy = true; this._cancel = false; const P = this._pipe(w, h, true);
       try {
         if (onProgress) onProgress(0.05);
-        const px = await this._offlineFrame(P, this._pose(), this._offlineCam(w, h), samples, this.time, transparent);
+        const cam = aspect > 0 ? this._offlineCam(aspect, 1) : this._offlineCam(w, h);
+        const px = await this._offlineFrame(P, this._pose(), cam, samples, this.time, transparent);
         if (onProgress) onProgress(1);
         const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
         cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), w, h), 0, 0);
@@ -985,35 +993,195 @@
       await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js'; s.onload = res; s.onerror = () => rej(new Error('Could not load the MP4 muxer.')); document.head.appendChild(s); });
       return window.Mp4Muxer;
     }
-    /** Seamless loop: the light sweeps across the logo and back over `seconds`. */
-    async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
+    /** Encode `frames` offline frames (render(P, f) → RGBA rows, top-down) to an H.264 MP4 Blob. Owns busy/cancel and the pipeline. */
+    async _encodeFrames({ w, h, fps, frames, render, onProgress }) {
       if (!SpectraEngine.canRenderVideo) throw new Error('This browser cannot encode MP4.');
       if (this.busy) throw new Error('A render is already running.');
-      const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2; const M = await this._muxer();
-      let config = null;
-      for (const codec of ['avc1.640033', 'avc1.640032', 'avc1.64002A', 'avc1.640028', 'avc1.4D402A', 'avc1.42E01F']) {
-        const cfg = { codec, width: w, height: h, bitrate: Math.round(w * h * fps * 0.2), framerate: fps, avc: { format: 'avc' } };
-        try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) { config = cfg; break; } } catch (e) { /* next */ }
-      }
-      if (!config) throw new Error('No supported H.264 encoder for ' + w + '×' + h + '.');
-      const target = new M.ArrayBufferTarget();
-      const muxer = new M.Muxer({ target, video: { codec: 'avc', width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
-      let err = null; const enc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { err = e; } }); enc.configure(config);
-      this.busy = true; this._cancel = false; const P = this._pipe(w, h, true); const frames = Math.round(fps * seconds); const cam = this._offlineCam(w, h);
-      const base = this._pose();
+      this.busy = true; this._cancel = false; let enc = null, P = null;
       try {
+        const M = await this._muxer();
+        let config = null;
+        for (const codec of ['avc1.640033', 'avc1.640032', 'avc1.64002A', 'avc1.640028', 'avc1.4D402A', 'avc1.42E01F']) {
+          const cfg = { codec, width: w, height: h, bitrate: Math.round(w * h * fps * 0.2), framerate: fps, avc: { format: 'avc' } };
+          try { const s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) { config = cfg; break; } } catch (e) { /* next */ }
+        }
+        if (!config) throw new Error('No supported H.264 encoder for ' + w + '×' + h + '.');
+        const target = new M.ArrayBufferTarget();
+        const muxer = new M.Muxer({ target, video: { codec: 'avc', width: w, height: h, frameRate: fps }, fastStart: 'in-memory' });
+        let err = null; enc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: e => { err = e; } }); enc.configure(config);
+        P = this._pipe(w, h, true);
         for (let f = 0; f < frames; f++) {
           if (err) throw err;
-          const t = f / fps, ph = 2 * Math.PI * t / seconds;
-          const pose = { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) };
-          this.aimOff = this._bestOffset(pose.ang, rotYX(pose.yaw, pose.pitch)); const px = await this._offlineFrame(P, pose, cam, spp, t * (12 / seconds), false);
+          const px = await render(P, f);
           const vf = new VideoFrame(px, { format: 'RGBA', codedWidth: w, codedHeight: h, timestamp: Math.round(f * 1e6 / fps), duration: Math.round(1e6 / fps) });
           enc.encode(vf, { keyFrame: f % (fps * 2) === 0 }); vf.close();
           while (enc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 4));
-          if (onProgress) onProgress((f + 1) / frames);
+          if (onProgress) onProgress((f + 1) / frames, { frame: f + 1, frames });
         }
-        await enc.flush(); muxer.finalize(); return new Blob([target.buffer], { type: 'video/mp4' });
-      } finally { try { enc.close(); } catch (e) { /* closed */ } this._free(P); this.busy = false; this._dirty = true; }
+        await enc.flush(); if (err) throw err; muxer.finalize(); return new Blob([target.buffer], { type: 'video/mp4' });
+      } finally { if (enc) { try { enc.close(); } catch (e) { /* closed */ } } if (P) this._free(P); this.busy = false; this._dirty = true; }
+    }
+    /** Seamless loop: the light sweeps across the logo and back over `seconds`. Any width×height (aspect = width/height). */
+    async renderVideo({ width = 1080, height = 1080, fps = 60, seconds = 6, spp = 8, onProgress } = {}) {
+      const w = Math.round(width / 2) * 2, h = Math.round(height / 2) * 2;
+      const frames = Math.round(fps * seconds), cam = this._offlineCam(w, h), base = this._pose(), keepOff = this.aimOff;
+      try {
+        return await this._encodeFrames({ w, h, fps, frames, onProgress, render: (P, f) => {
+          const t = f / fps, ph = 2 * Math.PI * t / seconds;
+          const pose = { ang: base.ang + 0.24 * Math.sin(ph), yaw: base.yaw + 0.06 * Math.sin(ph + 0.6), pitch: base.pitch + 0.035 * Math.sin(2 * ph) };
+          this.aimOff = this._bestOffset(pose.ang, rotYX(pose.yaw, pose.pitch));
+          return this._offlineFrame(P, pose, cam, spp, t * (12 / seconds), false);
+        } });
+      } finally { this.aimOff = keepOff; }
+    }
+
+    // ── camera: viewfinder framing · timeline capture · live replay · offline timeline render
+    //
+    //   setFrameAspect(aspect|null, box?) → rect      live view rendered only inside an `aspect` frame, with the offline camera
+    //   startTimeline() / stopTimeline() → timeline   record what drives the image each frame (+ small thumbnails)
+    //   playTimeline(tl, opts) / setReplay / stopReplay   replay a timeline live (preview); live state is restored afterwards
+    //   sampleTimeline(tl, t) → state                 smooth resampling at any time
+    //   renderTimeline({ timeline, start, end, width, aspect, fps, spp, onProgress }) → MP4 Blob (offline, frame-perfect)
+    //
+    /**
+     * Frame the live view exactly like an offline render at `aspect` (w/h). `box` = { x, y, w, h } in CSS px of the canvas (default:
+     * the whole canvas); the frame is the largest `aspect` rectangle centred in it, and aspect 0 fills the box ("Free"). While framed,
+     * the live image is drawn only inside the frame with the same camera, background and grade as renderStill / renderTimeline
+     * at that aspect: the viewfinder is the output. Pointer steering maps through the frame. null ends framing.
+     * Returns { x, y, w, h, aspect } (CSS px) or null.
+     */
+    setFrameAspect(aspect, box) {
+      if (aspect == null || aspect === false) { if (this._vf) { this._free(this._vf.P); this._vf = null; this._dirty = true; } return null; }
+      const W = this.canvas.clientWidth || 1, H = this.canvas.clientHeight || 1;
+      const b = box || { x: 0, y: 0, w: W, h: H }, bw = Math.max(8, b.w), bh = Math.max(8, b.h);
+      const a = aspect > 0 ? aspect : bw / bh;
+      let w = bw, h = w / a; if (h > bh) { h = bh; w = h * a; }
+      const rect = { x: b.x + (bw - w) / 2, y: b.y + (bh - h) / 2, w, h };
+      this._vf = Object.assign(this._vf || {}, { aspect: a, rect }); this._dirty = true;
+      return { ...rect, aspect: a };
+    }
+    getFrame() { return this._vf ? { ...this._vf.rect, aspect: this._vf.aspect } : null; }
+    _vfCam(W, H) { // full-canvas camera whose frame region equals the offline camera (used for pointer steering)
+      const f = this._vf, r = f.rect;
+      return { cx: (r.x + r.w / 2) / W * 2 - 1, cy: 1 - (r.y + r.h / 2) / H * 2, k: this._offlineCam(f.aspect, 1).k * H / Math.max(r.h, 1) };
+    }
+    _vfPipe() { // pipeline sized to the frame (device px × autoScale), exact aspect
+      const f = this._vf, c = this.canvas, sx = c.width / (c.clientWidth || 1), sy = c.height / (c.clientHeight || 1);
+      const dx = Math.round(f.rect.x * sx), dy = Math.round(f.rect.y * sy), dw = Math.max(2, Math.round(f.rect.w * sx)), dh = Math.max(2, Math.round(f.rect.h * sy));
+      let s = this.autoScale; if (dw * dh * s * s > 3.2e6) s = Math.sqrt(3.2e6 / (dw * dh));
+      const h = Math.max(2, Math.round(dh * s)), w = Math.max(2, Math.round(h * f.aspect));
+      if (!f.P || !f.P.scene || f.P.w !== w || f.P.h !== h) { this._free(f.P); f.P = this._pipe(w, h, true); this._dirty = true; }
+      f.src = [dx, dy, dw, dh]; f.dst = [dx, c.height - dy - dh, dx + dw, c.height - dy];
+      return { P: f.P, cam: this._offlineCam(f.aspect, 1), dst: f.dst };
+    }
+    _vfPresent(vf) {
+      const gl = this.gl, P = vf.P;
+      this._composite(P, P.out.fb, P.w, P.h, false, vf.cam, this.time, !!this.transparent);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, this.canvas.width, this.canvas.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, P.out.fb); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+      gl.blitFramebuffer(0, 0, P.w, P.h, vf.dst[0], vf.dst[1], vf.dst[2], vf.dst[3], gl.COLOR_BUFFER_BIT, gl.LINEAR);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+    /** Start recording the timeline: per frame the pose (drag + momentum), light aim, beam offset, env, animation time and look. */
+    startTimeline({ thumbHeight = 64, thumbEvery = 0.2, maxSeconds = 120 } = {}) {
+      this._rec = { t0: performance.now(), samples: [], thumbs: [], thumbH: thumbHeight, thumbEvery, lastThumb: -1e9, max: maxSeconds };
+      this._recPush(0, this._pose());
+      return true;
+    }
+    isRecording() { return !!this._rec; }
+    /** Stop recording → { duration, samples, thumbs: [{ t, canvas }], aspect } or null. */
+    stopTimeline() {
+      const R = this._rec; if (!R) return null; this._rec = null;
+      const t = Math.min(R.max, (performance.now() - R.t0) / 1000); this._rec = R; this._recPush(t, this._pose()); this._rec = null;
+      const S = R.samples;
+      return { version: 1, duration: S[S.length - 1].t, samples: S, thumbs: R.thumbs, aspect: this._vf ? this._vf.aspect : this.canvas.width / this.canvas.height };
+    }
+    _lookKey() { return this.material + '|' + this.theme + '|' + this.lightMode; }
+    _setLookKey(k) { if (!k || k === this._lookKey()) return; const [m, t, l] = k.split('|'); this.setMaterial(m); this.setTheme(t); this.setLightMode(l); }
+    _recPush(t, pose) {
+      const S = this._rec.samples, p = S[S.length - 1];
+      if (p && t <= p.t + 1e-4) return;
+      let ang = pose.ang; if (p) ang = p.ang + Math.atan2(Math.sin(ang - p.ang), Math.cos(ang - p.ang)); // continuous for interpolation
+      S.push({ t, yaw: pose.yaw, pitch: pose.pitch, ang, off: this.aimOff || 0, env: this.envYaw, time: this.time, look: this._lookKey() });
+    }
+    _recFrame(pose) { // called right after a live frame was presented
+      const R = this._rec, t = (performance.now() - R.t0) / 1000; if (t > R.max) return;
+      this._recPush(t, pose);
+      if (t - R.lastThumb >= R.thumbEvery) { const cv = this._grabThumb(R.thumbH); if (cv) { R.lastThumb = t; R.thumbs.push({ t, canvas: cv }); } }
+    }
+    _grabThumb(th) { // only valid in the same task as the frame was drawn (preserveDrawingBuffer is off)
+      const c = this.canvas, f = this._vf; const [sx, sy, sw, sh] = f && f.src ? f.src : [0, 0, c.width, c.height];
+      const cv = document.createElement('canvas'); cv.height = th; cv.width = Math.max(1, Math.round(th * sw / sh));
+      try { cv.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, cv.width, cv.height); } catch (e) { return null; }
+      return cv;
+    }
+    /** Timeline state at time t (s): cubic Hermite between recorded frames (non-uniform spacing), so any fps resamples smoothly. */
+    sampleTimeline(tl, t) {
+      const S = tl.samples, n = S.length; if (!n) return null;
+      if (n === 1 || t <= S[0].t) return { ...S[0] }; if (t >= S[n - 1].t) return { ...S[n - 1] };
+      let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m].t <= t) lo = m; else hi = m; }
+      const a = S[lo], b = S[hi], p = S[lo - 1] || a, q = S[hi + 1] || b, dt = b.t - a.t, u = (t - a.t) / dt;
+      const u2 = u * u, u3 = u2 * u, h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+      const o = { t, look: a.look, time: a.time + (b.time - a.time) * u };
+      for (const k of ['yaw', 'pitch', 'ang', 'off', 'env']) {
+        const m0 = (b[k] - p[k]) / ((b.t - p.t) || dt) * dt, m1 = (q[k] - a[k]) / ((q.t - a.t) || dt) * dt;
+        o[k] = h00 * a[k] + h10 * m0 + h01 * b[k] + h11 * m1;
+      }
+      o.pitch = clamp(o.pitch, -1.45, 1.45);
+      return o;
+    }
+    /** Replay a timeline live in the canvas (the preview). Live pose / light / look are saved here and restored by stopReplay(). */
+    playTimeline(tl, { start = 0, end = tl.duration, t = start, playing = true } = {}) {
+      if (!this._replay) this._replaySave = { rot: { ...this.rot }, aim: { ...this.aim }, target: { ...this.target }, aimOff: this.aimOff, bestOff: this._bestOff, envYaw: this.envYaw, envYawT: this.envYawT, time: this.time, pointer: this.pointer, lastPointerT: this.lastPointerT, look: this._lookKey() };
+      this._replay = { tl, start, end, t, playing }; this._dirty = true;
+    }
+    /** Update the replay: { t, start, end, playing } (any subset). Emits 'replay' { t, playing } every frame while replaying. */
+    setReplay(o = {}) {
+      const r = this._replay; if (!r) return;
+      const d = r.tl.duration;
+      if (o.start != null) r.start = clamp(o.start, 0, d); if (o.end != null) r.end = clamp(o.end, r.start, d);
+      if (o.t != null) r.t = clamp(o.t, 0, d); if (o.playing != null) r.playing = !!o.playing;
+      if (r.playing && (r.t < r.start || r.t >= r.end)) r.t = r.start;
+    }
+    getReplay() { const r = this._replay; return r ? { t: r.t, start: r.start, end: r.end, playing: r.playing } : null; }
+    stopReplay() {
+      if (!this._replay) return; this._replay = null; const s = this._replaySave; this._replaySave = null; if (!s) return;
+      Object.assign(this.rot, s.rot); Object.assign(this.aim, s.aim); Object.assign(this.target, s.target);
+      this.aimOff = s.aimOff; this._bestOff = s.bestOff; this.envYaw = s.envYaw; this.envYawT = s.envYawT; this.time = s.time;
+      this.pointer = s.pointer; this.lastPointerT = s.lastPointerT; this._setLookKey(s.look); this._bestAng = null; this._dirty = true;
+    }
+    _replayStep(dt) { // replaces _updateTargets + spin integration while replaying; returns the live camera
+      const r = this._replay;
+      if (r.playing) { r.t += dt; if (r.t >= r.end || r.t < r.start) r.t = r.start; }
+      const s = this.sampleTimeline(r.tl, r.t);
+      this._setLookKey(s.look);
+      const R = this.rot; R.yaw = s.yaw; R.pitch = s.pitch; R.vy = 0; R.vp = 0; R.reset = false;
+      this.aim.yaw = 0; this.aim.pitch = 0; this.aim.ang = s.ang;
+      this.aimOff = s.off; this._bestOff = s.off; this.envYaw = s.env; this.time = s.time;
+      this._emit('replay', { t: r.t, playing: r.playing });
+      return this._insetCam(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1);
+    }
+    /**
+     * Render [start, end] (s) of a timeline offline → H.264 MP4 Blob. The timeline is resampled at exactly `fps`; every frame is fully
+     * antialiased (`spp` samples) and framed like setFrameAspect(aspect) / renderStill({ aspect }), so the clip is smooth however
+     * laggy the live session was. width + aspect (height follows) or width + height. onProgress(fraction, { frame, frames });
+     * cancelRender() aborts with an AbortError.
+     */
+    async renderTimeline({ timeline, start = 0, end, width = 1080, height, aspect, fps = 60, spp = 8, onProgress } = {}) {
+      const tl = timeline; if (!tl || !tl.samples || !tl.samples.length) throw new Error('Empty timeline.');
+      end = clamp(end == null ? tl.duration : end, 0, tl.duration); start = clamp(start, 0, end);
+      if (aspect > 0 && !height) height = width / aspect;
+      const ev = (v) => clamp(Math.round(v / 2) * 2, 16, Math.min(this.maxTex, 8192));
+      const w = ev(width), h = ev(height || width), cam = this._offlineCam(aspect > 0 ? aspect : w, aspect > 0 ? 1 : h);
+      const frames = Math.max(1, Math.round((end - start) * fps));
+      const keep = { aimOff: this.aimOff, envYaw: this.envYaw, look: this._lookKey() };
+      try {
+        return await this._encodeFrames({ w, h, fps, frames, onProgress, render: (P, f) => {
+          const s = this.sampleTimeline(tl, start + f / fps);
+          this._setLookKey(s.look); this.aimOff = s.off; this.envYaw = s.env;
+          return this._offlineFrame(P, { yaw: s.yaw, pitch: s.pitch, ang: s.ang }, cam, spp, s.time, false);
+        } });
+      } finally { this._setLookKey(keep.look); this.aimOff = keep.aimOff; this.envYaw = keep.envYaw; this._dirty = true; }
     }
   }
   SpectraEngine.canRenderVideo = typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
