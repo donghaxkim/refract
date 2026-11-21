@@ -382,7 +382,7 @@
     let hinted = false, drag = null;
     // Camera mode: only steer while the pointer is inside the viewfinder (and not on a camera control); elsewhere, and when the
     // pointer leaves the window, the last aim is held so the composition doesn't swing on the way to Shutter / Stop.
-    const camOpen = () => !!(api.camera && api.camera.isOpen());
+    const camOpen = () => !!(api && api.camera && api.camera.isOpen());
     // The path from the logo to Shutter / Stop crosses the lower part of the frame, so on leaving the steering area the light is put
     // back where that last, roughly straight stroke out began: the move to a control never becomes the composition. Geometric
     // rather than timed, so it holds however laggy the live view (and so the pointer event rate) is.
