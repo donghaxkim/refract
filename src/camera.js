@@ -431,7 +431,19 @@
     let rT = 0;
     window.addEventListener('resize', () => { if (!st.open) return; cancelAnimationFrame(rT); rT = requestAnimationFrame(fit); });
 
-    const inst = { open: openCam, close: closeCam, isOpen: () => st.open, state: () => st.state, setMode, setAspect, _st: st };
+    /** Should this pointer event steer the light? Only inside the viewfinder frame, and never over a camera control, so moving to
+     *  Shutter / Stop (or any control) doesn't swing the composed light. Outside, SpectraUI holds the last aim. */
+    function steers(e) {
+      if (!st.open) return true;
+      if (st.state !== 'bar' && st.state !== 'rec') return false; // preview / rendering: the timeline or the file drives the image
+      const t = e.target;
+      if (t && t.closest && t.closest('#sp-cam button, #sp-cam [role="slider"], #sp-cam-bar, #sp-cam-rec, #sp-cam-busy, #sp-sheet, #sp-dock')) return false;
+      const f = st.frame; if (!f) return false;
+      const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      return x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h;
+    }
+
+    const inst = { open: openCam, close: closeCam, isOpen: () => st.open, state: () => st.state, steers, setMode, setAspect, _st: st };
     global.SpectraCamera.instance = inst; // handy for tests / embedding
     return inst;
   }

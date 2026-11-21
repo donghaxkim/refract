@@ -369,6 +369,35 @@
 
     /* ───── pointer → engine ───── */
     let hinted = false, drag = null;
+    // Camera mode: only steer while the pointer is inside the viewfinder (and not on a camera control); elsewhere, and when the
+    // pointer leaves the window, the last aim is held so the composition doesn't swing on the way to Shutter / Stop.
+    const camOpen = () => !!(api.camera && api.camera.isOpen());
+    // The path from the logo to Shutter / Stop crosses the lower part of the frame, so on leaving the steering area the light is put
+    // back where that last, roughly straight stroke out began: the move to a control never becomes the composition. Geometric
+    // rather than timed, so it holds however laggy the live view (and so the pointer event rate) is.
+    let trail = [], steering = false;
+    function rewindPoint() {
+      const n = trail.length, E = trail[n - 1]; let j = n - 1;
+      while (j > 0 && Math.hypot(E[0] - trail[j][0], E[1] - trail[j][1]) < 24) j--; // local exit direction, over ≥ 24 px
+      const dx = E[0] - trail[j][0], dy = E[1] - trail[j][1], L = Math.hypot(dx, dy);
+      if (L < 24) return [E[0], E[1], curAng()]; // barely moved: hold where it is
+      const ux = dx / L, uy = dy / L; let k = n - 1;
+      for (let i = n - 2; i >= 0; i--) {
+        const sx = trail[i + 1][0] - trail[i][0], sy = trail[i + 1][1] - trail[i][1], sl = Math.hypot(sx, sy);
+        if (sl > 2 && (sx * ux + sy * uy) / sl < 0.7) break; // the stroke turned (> ~45°): this is where it began
+        k = i;
+      }
+      // near the logo the pointer doesn't set the light's angle, so also restore the angle it had while the pointer was there
+      // (the target as seen when the next point arrived, i.e. after frames with this point applied)
+      return [trail[k][0], trail[k][1], (trail[k + 1] || [0, 0, curAng()])[2]];
+    }
+    const curAng = () => (engine && engine.target ? engine.target.ang : null);
+    function camSteers(e) {
+      if (!camOpen() || !api.camera.steers) { trail.length = 0; steering = false; return true; }
+      if (api.camera.steers(e)) { trail.push(toCanvas(e).concat(curAng())); if (trail.length > 96) trail.shift(); steering = true; return true; }
+      if (steering && trail.length) { const p = rewindPoint(); call('setPointer', p[0], p[1]); if (p[2] != null && engine.target) engine.target.ang = p[2]; }
+      steering = false; trail.length = 0; return false;
+    }
     function toCanvas(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
     function dismissHint() { if (hinted) return; hinted = true; setTimeout(() => hint.classList.add('is-gone'), 2600); }
     // hover steers the light; press-and-drag spins the logo (touch: drag spins, tap aims the light)
@@ -378,6 +407,7 @@
         call('rotateBy', dx, dy); dismissHint(); return;
       }
       if (e.pointerType === 'touch') return;
+      if (!camSteers(e)) return; // camera: hold the composed aim while the pointer is on the controls
       const p = toCanvas(e); call('setPointer', p[0], p[1]); dismissHint();
     }, { passive: true });
     canvas.addEventListener('pointerdown', (e) => {
@@ -388,14 +418,14 @@
     });
     const endDrag = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
-      if (drag.touch && drag.moved < 8) { const p = toCanvas(e); call('setPointer', p[0], p[1]); }
+      if (drag.touch && drag.moved < 8 && camSteers(e)) { const p = toCanvas(e); call('setPointer', p[0], p[1]); }
       drag = null; canvas.classList.remove('is-dragging'); call('endRotate');
     };
     window.addEventListener('pointerup', endDrag); window.addEventListener('pointercancel', endDrag);
     canvas.addEventListener('dblclick', () => call('resetRotation'));
-    document.documentElement.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !drag) call('setPointer', null); });
-    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget && !e.toElement && !drag) call('setPointer', null); });
-    window.addEventListener('blur', () => call('setPointer', null));
+    document.documentElement.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !drag && !camOpen()) call('setPointer', null); });
+    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget && !e.toElement && !drag && !camOpen()) call('setPointer', null); });
+    window.addEventListener('blur', () => { if (!camOpen()) call('setPointer', null); });
 
     /* ───── keyboard ───── */
     function setHidden(h) {
