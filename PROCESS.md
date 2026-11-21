@@ -155,10 +155,11 @@ Neither is pure black or white anymore.
 ## 7. Where it stands now
 
 **What the user sees**
-- One small pill: **Glass | Chrome · Light · Logo · Export**.
-- **Light:** Beam or Studio, plus a Dark or Light background.
+- One small pill: **Light · Logo · Export · Camera**.
+- **Light:** Beam or Studio, and the light **Source** (white, sun, tungsten, neon, sodium, mercury), on the light background.
 - **Logo:** upload an SVG or PNG, type a word, or pick from 6 original sample marks, plus Thickness and Roundness.
 - **Export:** a PNG at 2×, or a 6-second H.264 MP4 loop.
+- **Camera** (K): Photo, Video (record, trim, re-render offline) and Loop, framed by an aspect-ratio viewfinder that is exactly the output.
 - **Interaction:** hover steers the light, drag spins the logo, H hides the interface for screen recording, Space pauses.
 
 **Under the hood**
@@ -172,6 +173,11 @@ Neither is pure black or white anymore.
 - Tested only in software rendering. Smoothness and frame rate on a real GPU need checking on your machine.
 - A full 1080×1080 MP4 export hasn't been run end to end. Small test renders are valid.
 - Very intricate logos can still send out a second, fainter beam.
+
+### Later additions
+- **Light sources with real spectra.** White keeps the beam exactly as it was; Sun (D65) and Tungsten (2700 K) weight its 56 bands by their spectral power; Neon, Sodium and Mercury trace one ribbon per NIST emission line, with no sheet between lines, so they split into separate coloured lines. The source also tints the light seen through the glass.
+- **The rainbow lands.** The wall now curves through a cove into a floor. Every slice of the traced beam is clipped where it meets a surface and leaves an energy-weighted caustic there; a beam coming from below rises out of the floor. Before the user first steers, the light starts at an angle whose rainbow reaches the floor (or its mirror when the logo can't split light from there). Transparent output has no room.
+- **Camera mode** (UX adapted from 3dsvg, MIT): the viewfinder renders with the offline camera, Video records what drives the image each frame and re-renders the trimmed range offline, Loop exports keep one coherent line through the logo.
 
 ## 8. Lessons that carried through
 

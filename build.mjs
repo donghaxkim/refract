@@ -5,7 +5,7 @@ let ui = r('./src/ui.html');
 let head = '';
 ui = ui.replace(/<!--\s*HEAD:([\s\S]*?)-->/, (_, h) => { head = h.trim(); return ''; });
 const css = r('./src/ui.css');
-const js = ['./src/samples.js', './src/sdf.js', './src/engine.js', './src/mesh.js', './src/ui.js'].map(r).join('\n;\n');
+const js = ['./src/samples.js', './src/sdf.js', './src/engine.js', './src/mesh.js', './src/ui.js', './src/camera.js'].map(r).join('\n;\n');
 const boot = `
 (function(){
   function fail(msg){

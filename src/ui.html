@@ -45,6 +45,15 @@
           <button type="button" class="rf-opt" role="radio" aria-checked="true" data-light="beam"><span class="rf-opt-ico rf-ico-beam" aria-hidden="true"></span><span class="rf-row-t">Beam</span></button>
           <button type="button" class="rf-opt" role="radio" aria-checked="false" data-light="studio"><span class="rf-opt-ico rf-ico-studio" aria-hidden="true"></span><span class="rf-row-t">Studio</span></button>
         </div>
+        <p class="rf-pop-label">Source</p>
+        <div class="rf-opts rf-opts--3" role="radiogroup" aria-label="Light source">
+          <button type="button" class="rf-opt" role="radio" aria-checked="true" data-source="white" title="Equal-energy white light"><span class="rf-opt-ico rf-ico-src" aria-hidden="true"><i></i></span><span class="rf-row-t">White</span></button>
+          <button type="button" class="rf-opt" role="radio" aria-checked="false" data-source="sun" title="Daylight (CIE D65)"><span class="rf-opt-ico rf-ico-src" aria-hidden="true"><i></i></span><span class="rf-row-t">Sun</span></button>
+          <button type="button" class="rf-opt" role="radio" aria-checked="false" data-source="tungsten" title="Incandescent bulb, 2700 K"><span class="rf-opt-ico rf-ico-src" aria-hidden="true"><i></i></span><span class="rf-row-t">Tungsten</span></button>
+          <button type="button" class="rf-opt" role="radio" aria-checked="false" data-source="neon" title="Neon emission lines"><span class="rf-opt-ico rf-ico-src" aria-hidden="true"><i></i></span><span class="rf-row-t">Neon</span></button>
+          <button type="button" class="rf-opt" role="radio" aria-checked="false" data-source="sodium" title="Sodium D lines, 589 nm"><span class="rf-opt-ico rf-ico-src" aria-hidden="true"><i></i></span><span class="rf-row-t">Sodium</span></button>
+          <button type="button" class="rf-opt" role="radio" aria-checked="false" data-source="mercury" title="Mercury emission lines"><span class="rf-opt-ico rf-ico-src" aria-hidden="true"><i></i></span><span class="rf-row-t">Mercury</span></button>
+        </div>
         <!-- Dark/Light background removed for now: always the light background -->
       </div>
 
@@ -89,6 +98,110 @@
         <button type="button" class="rf-btn" id="rf-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-light">Light</button>
         <button type="button" class="rf-btn" id="rf-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-logo">Logo</button>
         <button type="button" class="rf-btn" id="rf-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="rf-pop-export">Export</button>
+        <button type="button" class="rf-btn rf-btn--icon" id="rf-camera" aria-label="Camera" title="Camera (K)" aria-keyshortcuts="K" aria-expanded="false" aria-controls="rf-cam">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.25 5.75c0-.69.56-1.25 1.25-1.25h1.6l.95-1.5h3.9l.95 1.5h1.6c.69 0 1.25.56 1.25 1.25v5.5c0 .69-.56 1.25-1.25 1.25h-9c-.69 0-1.25-.56-1.25-1.25z"/><circle cx="8" cy="8.4" r="2.2"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Camera mode (src/camera.js). Camera UX adapted from 3dsvg by Renato Costa, MIT. -->
+    <div class="rf-cam" id="rf-cam" hidden>
+      <div class="rf-vf" id="rf-vf" aria-hidden="true">
+        <i class="rf-vf-c rf-vf-c--tl"></i><i class="rf-vf-c rf-vf-c--tr"></i><i class="rf-vf-c rf-vf-c--bl"></i><i class="rf-vf-c rf-vf-c--br"></i>
+        <span class="rf-vf-size" id="rf-vf-size"></span>
+        <img class="rf-vf-media" id="rf-vf-img" alt="" hidden>
+        <video class="rf-vf-media" id="rf-vf-video" muted loop playsinline hidden></video>
+        <span class="rf-vf-flash" id="rf-vf-flash"></span>
+      </div>
+
+      <div class="rf-cam-bar" id="rf-cam-bar" role="group" aria-label="Camera">
+        <div class="rf-cam-opts">
+          <div class="rf-cam-aspect" id="rf-cam-aspect" role="radiogroup" aria-label="Aspect ratio">
+            <button type="button" role="radio" data-aspect="free" aria-checked="true">Free</button>
+            <button type="button" role="radio" data-aspect="1:1" aria-checked="false">1:1</button>
+            <button type="button" role="radio" data-aspect="4:5" aria-checked="false">4:5</button>
+            <button type="button" role="radio" data-aspect="9:16" aria-checked="false">9:16</button>
+            <button type="button" role="radio" data-aspect="16:9" aria-checked="false">16:9</button>
+          </div>
+          <span class="rf-div" aria-hidden="true"></span>
+          <button type="button" class="rf-cam-res" id="rf-cam-res" aria-label="Resolution 1080p">1080p</button>
+        </div>
+        <div class="rf-cam-modes" id="rf-cam-modes" role="radiogroup" aria-label="Capture mode">
+          <button type="button" role="radio" data-mode="photo" aria-checked="true">Photo</button>
+          <button type="button" role="radio" data-mode="video" aria-checked="false">Video</button>
+          <button type="button" role="radio" data-mode="loop" aria-checked="false">Loop</button>
+        </div>
+        <div class="rf-cam-row">
+          <button type="button" class="rf-cam-round" id="rf-cam-close" aria-label="Close camera" title="Close (Esc)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+          </button>
+          <button type="button" class="rf-shutter" id="rf-shutter" data-mode="photo" aria-label="Take photo"><span class="rf-shutter-core"></span></button>
+          <button type="button" class="rf-cam-round" id="rf-cam-clear" aria-pressed="false" aria-label="Transparent background" title="Transparent background">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2"/><path class="f" d="M3 5a2 2 0 0 1 2-2h3v5H3zM8 8h5v3a2 2 0 0 1-2 2H8z"/></svg>
+          </button>
+        </div>
+        <p class="rf-cam-note" id="rf-cam-note"></p>
+      </div>
+
+      <div class="rf-cam-pill rf-cam-rec" id="rf-cam-rec" role="group" aria-label="Recording" hidden>
+        <span class="rf-rec-dot" aria-hidden="true"></span>
+        <span class="rf-rec-time" id="rf-rec-time" role="timer" aria-label="Recording time">0:00.0</span>
+        <button type="button" class="rf-rec-stop" id="rf-rec-stop"><i aria-hidden="true"></i>Stop</button>
+      </div>
+
+      <div class="rf-cam-pill rf-cam-busy" id="rf-cam-busy" role="group" aria-label="Rendering" hidden>
+        <div class="rf-prog">
+          <div class="rf-prog-top">
+            <span class="rf-row-t" id="rf-busy-label">Rendering</span>
+            <span class="rf-prog-pct" id="rf-busy-pct">0%</span>
+            <button type="button" class="rf-cancel" id="rf-busy-cancel">Cancel</button>
+          </div>
+          <div class="rf-prog-bar" role="progressbar" aria-label="Render progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="rf-busy-fill"></i></div>
+        </div>
+      </div>
+
+      <div class="rf-sheet" id="rf-sheet" role="dialog" aria-label="Preview" aria-describedby="rf-sheet-meta" hidden>
+        <div class="rf-sheet-head">
+          <span class="rf-row-t" id="rf-sheet-title">Photo</span>
+          <span class="rf-row-s" id="rf-sheet-meta"></span>
+        </div>
+        <div class="rf-trim" id="rf-trim" hidden>
+          <div class="rf-trim-main">
+            <button type="button" class="rf-trim-play" id="rf-trim-play" aria-label="Pause">
+              <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4v8M10.5 4v8"/></svg>
+              <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.8l6.5 4.2-6.5 4.2z"/></svg>
+            </button>
+            <div class="rf-trim-strip" id="rf-trim-strip">
+              <canvas class="rf-trim-film" id="rf-trim-film" aria-hidden="true"></canvas>
+              <i class="rf-trim-dim" id="rf-trim-dim-l"></i><i class="rf-trim-dim" id="rf-trim-dim-r"></i>
+              <i class="rf-trim-sel" id="rf-trim-sel"></i>
+              <i class="rf-trim-head" id="rf-trim-head"></i>
+              <span class="rf-trim-h rf-trim-h--s" id="rf-trim-hs" role="slider" tabindex="0" aria-label="Trim start" data-handle="start"><svg viewBox="0 0 6 16" aria-hidden="true"><path d="M4 3L2 8l2 5"/></svg></span>
+              <span class="rf-trim-h rf-trim-h--e" id="rf-trim-he" role="slider" tabindex="0" aria-label="Trim end" data-handle="end"><svg viewBox="0 0 6 16" aria-hidden="true"><path d="M2 3l2 5-2 5"/></svg></span>
+            </div>
+          </div>
+          <div class="rf-trim-times" aria-hidden="true"><span id="rf-trim-t0">0.0s</span><span id="rf-trim-len">0.0s</span><span id="rf-trim-t1">0.0s</span></div>
+        </div>
+        <div class="rf-sheet-opts" id="rf-sheet-opts" hidden>
+          <div class="rf-cam-fps" id="rf-cam-fps" role="radiogroup" aria-label="Frame rate">
+            <button type="button" role="radio" data-fps="30" aria-checked="false">30 fps</button>
+            <button type="button" role="radio" data-fps="60" aria-checked="true">60 fps</button>
+          </div>
+          <p class="rf-sheet-note" id="rf-sheet-note">Rendered offline, frame by frame: smooth even if the live view stuttered.</p>
+        </div>
+        <div class="rf-sheet-prog" id="rf-sheet-prog" hidden>
+          <div class="rf-prog">
+            <div class="rf-prog-top">
+              <span class="rf-row-t" id="rf-sheet-prog-label">Rendering</span>
+              <span class="rf-prog-pct" id="rf-sheet-prog-pct">0%</span>
+              <button type="button" class="rf-cancel" id="rf-sheet-cancel">Cancel</button>
+            </div>
+            <div class="rf-prog-bar" role="progressbar" aria-label="Render progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="rf-sheet-prog-fill"></i></div>
+          </div>
+        </div>
+        <div class="rf-sheet-actions" id="rf-sheet-actions">
+          <button type="button" class="rf-sbtn" id="rf-retake">Retake</button>
+          <button type="button" class="rf-sbtn rf-sbtn--primary" id="rf-dl">Download</button>
+        </div>
       </div>
     </div>
   </div>

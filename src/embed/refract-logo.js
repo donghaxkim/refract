@@ -8,7 +8,8 @@
   'use strict';
   if (typeof window === 'undefined' || !window.customElements || customElements.get('refract-logo')) return;
 
-  const ATTRS = ['src', 'text', 'sample', 'font', 'material', 'light', 'theme', 'background', 'transparent', 'thickness', 'roundness', 'interactive', 'poster', 'alt'];
+  const ATTRS = ['src', 'text', 'sample', 'font', 'material', 'light', 'source', 'theme', 'background', 'transparent', 'thickness', 'roundness', 'interactive', 'poster', 'alt'];
+  const SOURCES = ['white', 'sun', 'tungsten', 'neon', 'sodium', 'mercury']; // light source spectra (engine.setLightSource)
   const THEME_BG = { dark: '#121216', light: '#d3d0ca' }; // what each theme's backdrop tone-maps to (pre-render / fallback fill)
   const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
   const fieldCache = new Map(); // shared by every instance: key → Promise<field>
@@ -63,6 +64,7 @@
     get font() { return this.getAttribute('font'); } set font(v) { this._setAttr('font', v); }
     get material() { return 'glass'; } // chrome hidden for now set material(v) { this._setAttr('material', v); }
     get light() { return this.getAttribute('light') === 'studio' ? 'studio' : 'beam'; } set light(v) { this._setAttr('light', v); }
+    get source() { const v = this.getAttribute('source'); return SOURCES.includes(v) ? v : 'white'; } set source(v) { this._setAttr('source', v); }
     get theme() { return this._theme(); } set theme(v) { this._setAttr('theme', v); }
     get background() { return this.getAttribute('background'); } set background(v) { this._setAttr('background', v); }
     get transparent() { return boolAttr(this.getAttribute('transparent'), false); } set transparent(v) { this._setBool('transparent', v); }
@@ -159,7 +161,7 @@
     }
     _applySettings() {
       const e = this.engine; if (!e) return;
-      e.setTheme(this._theme()); e.setMaterial(this.material); e.setLightMode(this.light);
+      e.setTheme(this._theme()); e.setMaterial(this.material); e.setLightMode(this.light); if (e.setLightSource) e.setLightSource(this.source);
       e.setTransparent(this.transparent);
       const bg = this.getAttribute('background');
       e.setBackground(bg && cssLuma(bg) != null ? bg : null);

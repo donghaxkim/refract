@@ -21,7 +21,7 @@
     const Engine = global.RefractEngine || (engine && engine.constructor) || {};
     const call = (name, ...args) => { try { if (engine && typeof engine[name] === 'function') return engine[name].apply(engine, args); } catch (e) { console.error('[Refract UI] engine.' + name, e); } };
 
-    let material = 'glass', uiHidden = false, paused = false;
+    let material = 'glass', uiHidden = false, paused = false, api = null;
     let buildToken = 0, activeSample = null, exporting = null, logoName = '';
 
     /* ───── toast ───── */
@@ -38,6 +38,14 @@
       const open = openPop && !openPop.hidden ? openPop : null;
       toastEl.style.bottom = open ? 'calc(100% + ' + (open.offsetHeight + 22) + 'px)' : '';
     }
+
+    /* ───── scene lock: while the camera records / previews / renders, or any render runs, the scene must not change ───── */
+    function lockReason() {
+      const cam = api && api.camera; const r = cam && cam.lockReason ? cam.lockReason() : '';
+      if (r) return r;
+      return engine && engine.busy ? 'Not while exporting' : '';
+    }
+    function blocked() { const r = lockReason(); if (r) toast(r, null, 1800); return !!r; }
 
     /* ───── material ───── */
     function placeIndicator(anim) {
@@ -109,7 +117,8 @@
       const bind = (id, key) => {
         const el = $('#' + id), out = $('#' + id + '-v');
         const paint = () => { el.style.setProperty('--p', el.value + '%'); out.textContent = el.value; };
-        el.addEventListener('input', () => { paint(); st[key] = el.value / 100; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => call('setShape', { ...st })); });
+        let applied = el.value;
+        el.addEventListener('input', () => { if (blocked()) { el.value = applied; paint(); return; } applied = el.value; paint(); st[key] = el.value / 100; cancelAnimationFrame(raf); raf = requestAnimationFrame(() => call('setShape', { ...st })); });
         el.addEventListener('dblclick', () => { el.value = key === 'thickness' ? 50 : 65; el.dispatchEvent(new Event('input')); });
         paint();
       };
@@ -119,11 +128,40 @@
     function pick(attr, val) { $$('button[data-' + attr + ']', popLight).forEach((b) => b.setAttribute('aria-checked', String(b.dataset[attr] === val))); }
     function setLight(v) { pick('light', v); call('setLightMode', v); }
     function setTheme(v) { pick('theme', v); root.classList.toggle('is-light', v === 'light'); call('setTheme', v); }
+    function setSource(v) { pick('source', v); call('setLightSource', v); }
     popLight.addEventListener('click', (e) => {
       const b = e.target.closest('button'); if (!b) return;
+      if ((b.dataset.light || b.dataset.source) && blocked()) return;
       if (b.dataset.light) setLight(b.dataset.light);
-      if (b.dataset.theme) setTheme(b.dataset.theme);
+      if (b.dataset.source) setSource(b.dataset.source);
     });
+    // arrow keys move (and select) within each radio group, like native radios
+    popLight.addEventListener('keydown', (e) => {
+      const k = e.key; if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(k)) return;
+      const b = e.target.closest('.rf-opt'); const g = b && b.parentElement; if (!g) return;
+      const all = $$('.rf-opt', g), i = all.indexOf(b), d = k === 'ArrowLeft' || k === 'ArrowUp' ? -1 : 1;
+      const nb = all[(i + d + all.length) % all.length]; e.preventDefault(); nb.focus(); nb.click();
+    });
+    // spectrum swatches, drawn from the engine's own source data: a gradient for continuous light, thin bars for emission lines
+    (function paintSources() {
+      const S = Engine && Engine.lightSources; if (!S) return;
+      const hex = (c) => '#' + c.map(v => { v = Math.max(0, Math.min(1, v)); v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; return Math.round(v * 255).toString(16).padStart(2, '0'); }).join('');
+      const pos = (l) => ((l - 400) / 300 * 100).toFixed(2) + '%';
+      S.forEach((s) => {
+        const el = $('button[data-source="' + s.id + '"] .rf-ico-src i', popLight); if (!el) return;
+        const mx = Math.max(...s.bands.map(b => Math.max(...b.rgb))) || 1;
+        if (s.kind === 'cont') {
+          el.style.backgroundImage = 'linear-gradient(90deg,' + s.bands.map(b => hex(b.rgb.map(v => v / mx)) + ' ' + pos(b.lam)).join(',') + ')';
+        } else {
+          const stops = []; s.bands.forEach((b) => {
+            const m = Math.max(...b.rgb); if (m < mx * 0.01) return;
+            const c = hex(b.rgb.map(v => v / m * Math.pow(m / mx, 0.35))), x = (b.lam - 400) / 300 * 100;
+            stops.push('transparent ' + (x - 0.9).toFixed(2) + '%', c + ' ' + (x - 0.9).toFixed(2) + '%', c + ' ' + (x + 0.9).toFixed(2) + '%', 'transparent ' + (x + 0.9).toFixed(2) + '%');
+          });
+          el.style.backgroundImage = 'linear-gradient(90deg,' + stops.join(',') + ')';
+        }
+      });
+    })();
     document.addEventListener('pointerdown', (e) => {
       if (!openPop) return;
       if (openPop.contains(e.target) || (openBtn && openBtn.contains(e.target))) return;
@@ -153,7 +191,7 @@
       b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', s.name || 'Sample ' + (i + 1)); b.title = s.name || '';
       const url = whiteSvgURL(s.svg);
       if (url) { const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = url; b.appendChild(img); }
-      b.addEventListener('click', () => loadSample(i));
+      b.addEventListener('click', () => { if (!blocked()) loadSample(i); });
       sampleRow.appendChild(b);
     });
     function markSample(sid, busy) {
@@ -191,6 +229,7 @@
     }
     async function loadFile(file) {
       if (!file) return;
+      if (blocked()) return;
       const name = file.name || 'file';
       const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(name);
       const isImg = /^image\/(png|jpe?g|webp)$/i.test(file.type) || /\.(png|jpe?g|webp)$/i.test(name);
@@ -206,12 +245,12 @@
       return buildField({ type: 'image', blob: file }, { done: 'Using ' + short, name: name.replace(/\.[^.]+$/, '') });
     }
     const fileIn = $('#rf-file');
-    $('#rf-pick').addEventListener('click', () => fileIn.click());
+    $('#rf-pick').addEventListener('click', () => { if (!blocked()) fileIn.click(); });
     fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; loadFile(f); });
     const wordForm = $('#rf-word'), wordIn = $('#rf-word-in');
     wordForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const w = wordIn.value.trim(); if (!w) return;
+      const w = wordIn.value.trim(); if (!w || blocked()) return;
       activeSample = null; markSample(null);
       buildField({ type: 'text', text: w, fontFamily: '"Instrument Sans", Inter, system-ui, sans-serif', fontWeight: 700 }, { done: 'Using “' + w + '”', name: w });
       wordIn.blur(); close();
@@ -220,7 +259,7 @@
     // drag & drop anywhere
     const dz = $('#rf-dropzone'); let depth = 0;
     const hasFiles = (e) => e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0;
-    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; dz.classList.add('is-on'); });
+    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; if (!lockReason()) dz.classList.add('is-on'); });
     window.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
     window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) dz.classList.remove('is-on'); });
     window.addEventListener('drop', (e) => {
@@ -341,6 +380,33 @@
 
     /* ───── pointer → engine ───── */
     let hinted = false, drag = null;
+    // Camera mode: only steer while the pointer is inside the viewfinder (and not on a camera control); elsewhere, and when the
+    // pointer leaves the window, the last aim is held so the composition doesn't swing on the way to Shutter / Stop.
+    const camOpen = () => !!(api && api.camera && api.camera.isOpen());
+    // The path from the logo to Shutter / Stop crosses the lower part of the frame, so on leaving the steering area the light is put
+    // back where that last, roughly straight stroke out began: the move to a control never becomes the composition. Geometric
+    // rather than timed, so it holds however laggy the live view (and so the pointer event rate) is. In the vgpu model the pointer
+    // sets the light's angle (height) and point of impact (width) directly, so restoring that point restores the aim.
+    let trail = [], steering = false;
+    function rewindPoint() {
+      const n = trail.length, E = trail[n - 1]; let j = n - 1;
+      while (j > 0 && Math.hypot(E[0] - trail[j][0], E[1] - trail[j][1]) < 24) j--; // local exit direction, over ≥ 24 px
+      const dx = E[0] - trail[j][0], dy = E[1] - trail[j][1], L = Math.hypot(dx, dy);
+      if (L < 24) return [E[0], E[1]]; // barely moved: hold where it is
+      const ux = dx / L, uy = dy / L; let k = n - 1;
+      for (let i = n - 2; i >= 0; i--) {
+        const sx = trail[i + 1][0] - trail[i][0], sy = trail[i + 1][1] - trail[i][1], sl = Math.hypot(sx, sy);
+        if (sl > 2 && (sx * ux + sy * uy) / sl < 0.7) break; // the stroke turned (> ~45°): this is where it began
+        k = i;
+      }
+      return [trail[k][0], trail[k][1]];
+    }
+    function camSteers(e) {
+      if (!camOpen() || !api.camera.steers) { trail.length = 0; steering = false; return true; }
+      if (api.camera.steers(e)) { trail.push(toCanvas(e)); if (trail.length > 96) trail.shift(); steering = true; return true; }
+      if (steering && trail.length) { const p = rewindPoint(); call('setPointer', p[0], p[1]); }
+      steering = false; trail.length = 0; return false;
+    }
     function toCanvas(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
     function dismissHint() { if (hinted) return; hinted = true; setTimeout(() => hint.classList.add('is-gone'), 2600); }
     // hover steers the light; press-and-drag spins the logo (touch: drag spins, tap aims the light)
@@ -350,6 +416,7 @@
         call('rotateBy', dx, dy); dismissHint(); return;
       }
       if (e.pointerType === 'touch') return;
+      if (!camSteers(e)) return; // camera: hold the composed aim while the pointer is on the controls
       const p = toCanvas(e); call('setPointer', p[0], p[1]); dismissHint();
     }, { passive: true });
     canvas.addEventListener('pointerdown', (e) => {
@@ -360,14 +427,14 @@
     });
     const endDrag = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
-      if (drag.touch && drag.moved < 8) { const p = toCanvas(e); call('setPointer', p[0], p[1]); }
+      if (drag.touch && drag.moved < 8 && camSteers(e)) { const p = toCanvas(e); call('setPointer', p[0], p[1]); }
       drag = null; canvas.classList.remove('is-dragging'); call('endRotate');
     };
     window.addEventListener('pointerup', endDrag); window.addEventListener('pointercancel', endDrag);
     canvas.addEventListener('dblclick', () => call('resetRotation'));
-    document.documentElement.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !drag) call('setPointer', null); });
-    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget && !e.toElement && !drag) call('setPointer', null); });
-    window.addEventListener('blur', () => call('setPointer', null));
+    document.documentElement.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && !drag && !camOpen()) call('setPointer', null); });
+    document.addEventListener('mouseout', (e) => { if (!e.relatedTarget && !e.toElement && !drag && !camOpen()) call('setPointer', null); });
+    window.addEventListener('blur', () => { if (!camOpen()) call('setPointer', null); });
 
     /* ───── keyboard ───── */
     function setHidden(h) {
@@ -394,6 +461,7 @@
 
     /* ───── layout / insets ───── */
     function insets() {
+      if (!pill.offsetParent) return; // pill hidden (camera mode frames the view itself)
       const r = pill.getBoundingClientRect();
       const bottom = Math.max(0, Math.round(window.innerHeight - r.top + 8));
       call('setViewInsets', { right: 0, bottom });
@@ -405,6 +473,8 @@
     if (engine && typeof engine.on === 'function') {
       engine.on('error', (e) => { console.error('[Refract UI] engine error', e); toast((e && e.message) || 'Rendering error', 'err', 4200); });
       engine.on('ready', () => ui.classList.add('is-in'));
+      // the engine changed its look by itself (timeline replay / restore): make the Light menu agree, without calling back into it
+      engine.on('look', (l) => { if (!l) return; pick('light', l.lightMode); pick('source', l.source); });
     }
 
     /* ───── boot ───── */
@@ -420,7 +490,10 @@
     }
     if (!engine) toast('Renderer unavailable in this browser', 'err', 6000);
 
-    return { toast, setMaterial, loadFile, loadSample, close, hide: setHidden };
+    api = { toast, setMaterial, loadFile, loadSample, close, hide: setHidden, isHidden: () => uiHidden, isExporting: () => !!exporting, saveBlob, relayout: () => { placeIndicator(false); insets(); } };
+    // camera mode (src/camera.js): Photo / Video / Loop with viewfinder, trimmer and offline capture
+    if (global.RefractCamera) { try { api.camera = global.RefractCamera.init(engine, api); } catch (e) { console.error('[Refract UI] camera', e); } }
+    return api;
   }
 
   global.RefractUI = { init };
