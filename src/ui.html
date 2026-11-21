@@ -45,11 +45,7 @@
           <button type="button" class="sp-opt" role="radio" aria-checked="true" data-light="beam"><span class="sp-opt-ico sp-ico-beam" aria-hidden="true"></span><span class="sp-row-t">Beam</span></button>
           <button type="button" class="sp-opt" role="radio" aria-checked="false" data-light="studio"><span class="sp-opt-ico sp-ico-studio" aria-hidden="true"></span><span class="sp-row-t">Studio</span></button>
         </div>
-        <p class="sp-pop-label">Background</p>
-        <div class="sp-opts" role="radiogroup" aria-label="Background">
-          <button type="button" class="sp-opt" role="radio" aria-checked="true" data-theme="dark"><span class="sp-opt-ico sp-ico-dark" aria-hidden="true"></span><span class="sp-row-t">Dark</span></button>
-          <button type="button" class="sp-opt" role="radio" aria-checked="false" data-theme="light"><span class="sp-opt-ico sp-ico-light" aria-hidden="true"></span><span class="sp-row-t">Light</span></button>
-        </div>
+        <!-- Dark/Light background removed for now: always the light background -->
       </div>
 
       <!-- Export popover -->
@@ -89,12 +85,7 @@
       </div>
 
       <div class="sp-pill" id="sp-pill" role="toolbar" aria-label="Spectra controls">
-        <div class="sp-seg" id="sp-seg" role="radiogroup" aria-label="Material">
-          <span class="sp-seg-ind" id="sp-seg-ind" aria-hidden="true"></span>
-          <button type="button" role="radio" aria-checked="true" data-material="glass" aria-keyshortcuts="G">Glass</button>
-          <button type="button" role="radio" aria-checked="false" data-material="chrome" aria-keyshortcuts="C">Chrome</button>
-        </div>
-        <span class="sp-div" aria-hidden="true"></span>
+        <!-- Glass/Chrome switch removed for now (engine still supports chrome) -->
         <button type="button" class="sp-btn" id="sp-light" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-light">Light</button>
         <button type="button" class="sp-btn" id="sp-logo" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-logo">Logo</button>
         <button type="button" class="sp-btn" id="sp-export" aria-haspopup="dialog" aria-expanded="false" aria-controls="sp-pop-export">Export</button>

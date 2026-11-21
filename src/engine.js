@@ -13,9 +13,25 @@
   const lerp = (a, b, t) => a + (b - a) * t;
 
   // ───────────────────────────────────────── optics constants
-  const IOR = 1.5, CAUCHY_B = 0.065;              // stylised flint: strong, clean fan
+  // Real dense flint glass (≈ Schott SF2): n_d = 1.65, Abbe ≈ 32. Cauchy n(λ) = n_d + B(1/λ² − 1/λd²), B in µm².
+  // Matches vgpu's measured 'flint' preset (B = 0.0105). The old stylised B = 0.065 was ~6× real flint: a 26° fan through
+  // a 60° prism instead of ~5°, which swamped how each shape actually bends light.
+  // The BEAM uses vgpu's 'stylised' spectral material, n(λ) = 1.2 + 0.1/λ² (λ in µm), traced with exact Snell + Fresnel:
+  // a gentle bend with a wide, clean fan. Written here in Spectra's form n_d + B(1/λ² − 1/λd²).
+  const IOR = 1.2 + 0.1 / (0.5876 * 0.5876), CAUCHY_B = 0.07; // vgpu's 0.1 eased slightly: arbitrary logos (not a clean prism) otherwise split into many crossing fans
+  // The GLASS itself is shaded as clear glass (≈ crown) with only a hint of dispersion: as on vgpu.sh, the colour lives
+  // in the beam, not smeared through the glass.
+  const GLASS_IOR = 1.52, GLASS_CAUCHY_B = 0.006;
   const iorAt = (lamNm) => { const l = lamNm * 0.001; return IOR + CAUCHY_B * (1 / (l * l) - 1 / (0.5876 * 0.5876)); };
-  const BEAM_WAVES = 56, BEAM_SLICES = 1, BEAM_WIDTH = 0.034;
+  const BEAM_WAVES = 56, BEAM_SLICES = 5, BEAM_WIDTH = 0.034;
+  // vgpu-style finite beam: the spectral fan is the additive sum of BEAM_SLICES parallel sub-beams across the beam's width,
+  // weighted by a soft Gaussian profile, so neighbouring fans overlap and blend instead of one thin line showing every ripple.
+  // Beam slicing, per-ray spectral density and the pointer mapping/easing follow the prism hero in vercel-labs/vgpu
+  // (apps/docs/.../prism-background: light-mesh.ts, interaction.ts), MIT License, Copyright (c) 2025 Vercel, Inc.
+  const BEAM_HALF = 0.05, BEAM_EDGE = 2.2;
+  const FADE_RATE = 0.9, FADE_POWER = 2.2; // after leaving the glass the rainbow dissolves smoothly instead of running off-screen
+  // vgpu interaction: pointer height swings the light along an arc, pointer width chooses where it strikes the logo.
+  const AIM_ARC = 0.85, AIM_REACH = 0.72, AIM_LERP = 0.12, ORBIT_LERP = 0.08; // lerps are per 60 Hz frame (vgpu LAMP_AIM_LERP / CAMERA_ORBIT_LERP)
 
   // CIE 1931 fit → linear sRGB (clamped), normalised so an even spread of N wavelengths sums to white
   function g1(x, mu, s1, s2) { const t = (x - mu) / (x < mu ? s1 : s2); return Math.exp(-0.5 * t * t); }
@@ -40,9 +56,25 @@
   }
   let SPEC_NORM_SHADER;
   SPEC_NORM_SHADER = specNorm(400, 700, 4000);
+  // Beam palette ported from vgpu's wavelengthToBeamRgb (MIT, Vercel): CIE 1931 colour matching (Wyman–Sloan–Shirley fit)
+  // under D65 daylight, shifted toward neutral into the sRGB gamut, one shared photographic shoulder, white-balanced.
+  // Unlike an equal-energy rainbow, greens/yellows read bright and deep violet/red fall away, so the fan looks like light.
+  const cieX = (w) => { const t1 = (w - 442) * (w < 442 ? 0.0624 : 0.0374), t2 = (w - 599.8) * (w < 599.8 ? 0.0264 : 0.0323), t3 = (w - 501.1) * (w < 501.1 ? 0.049 : 0.0382); return 0.362 * Math.exp(-0.5 * t1 * t1) + 1.056 * Math.exp(-0.5 * t2 * t2) - 0.065 * Math.exp(-0.5 * t3 * t3); };
+  const cieY = (w) => { const t1 = (w - 568.8) * (w < 568.8 ? 0.0213 : 0.0247), t2 = (w - 530.9) * (w < 530.9 ? 0.0613 : 0.0322); return 0.821 * Math.exp(-0.5 * t1 * t1) + 0.286 * Math.exp(-0.5 * t2 * t2); };
+  const cieZ = (w) => { const t1 = (w - 437) * (w < 437 ? 0.0845 : 0.0278), t2 = (w - 459) * (w < 459 ? 0.0385 : 0.0725); return 1.217 * Math.exp(-0.5 * t1 * t1) + 0.681 * Math.exp(-0.5 * t2 * t2); };
+  const D65 = [82.7549, 91.486, 93.4318, 86.6823, 104.865, 117.008, 117.812, 114.861, 115.923, 108.811, 109.354, 107.802, 104.79, 107.689, 104.405, 104.046, 100, 96.3342, 95.788, 88.6856, 90.0062, 89.5991, 87.6987, 83.2886, 83.6992, 80.0268, 80.2146, 82.2778, 78.2842, 69.7213, 71.6091];
+  function beamRgb(w) {
+    w = clamp(w, 400, 700); const x = cieX(w), y = cieY(w), z = cieZ(w);
+    const lin = [3.2406 * x - 1.5372 * y - 0.4986 * z, -0.9689 * x + 1.8758 * y + 0.0415 * z, 0.0557 * x - 0.204 * y + 1.057 * z];
+    const off = Math.min(0, ...lin), pos = lin.map(c => c - off), peak = Math.max(...pos, 1e-9);
+    const co = clamp((w - 400) / 10, 0, 30), lo = Math.min(29, Math.floor(co)), fr = co - lo, d65 = (D65[lo] * (1 - fr) + D65[lo + 1] * fr) / 100;
+    const pw = (1 - Math.exp(-4.5 * d65 * y / 1.0347)) / (1 - Math.exp(-4.5)), WB = [1.1868, 1, 2.2495];
+    return pos.map((c, i) => c / peak * pw * WB[i]);
+  }
   const BEAM_COLORS = (() => {
-    const n = specNorm(400, 700, BEAM_WAVES); const out = [];
-    for (let i = 0; i < BEAM_WAVES; i++) { const l = 400 + 300 * (i + 0.5) / BEAM_WAVES; const c = zucconi(l); out.push({ lam: l, rgb: [c[0] * n[0], c[1] * n[1], c[2] * n[2]] }); }
+    const out = [], sum = [0, 0, 0];
+    for (let i = 0; i < BEAM_WAVES; i++) { const l = 400 + 300 * (i + 0.5) / BEAM_WAVES; const c = beamRgb(l); out.push({ lam: l, rgb: c }); for (let k = 0; k < 3; k++) sum[k] += c[k]; }
+    for (const o of out) o.rgb = o.rgb.map((c, k) => c * BEAM_WAVES / sum[k]); // average 1 per channel: together exactly white
     return out;
   })();
 
@@ -310,6 +342,7 @@
   vec3 look(vec3 v){ float l = dot(v, vec3(0.2126,0.7152,0.0722)); v = pow(max(v,0.0), vec3(1.3)); l = pow(max(l,0.0), 1.3); return l + 1.45*(v-l); }
   vec3 agxEotf(vec3 v){ const mat3 mi = mat3(1.19687900512017,-0.0528968517574562,-0.0529716355144438, -0.0980208811401368,1.15190312990417,-0.0980434501171241, -0.0990297440797205,-0.0989611768448433,1.15107367264116);
     return pow(max(mi*v,0.0), vec3(2.2)); }
+  vec3 aces(vec3 x){ return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 0.0, 1.0); } // as vgpu.sh
   vec3 toSrgb(vec3 c){ c = clamp(c,0.0,1.0); return mix(c*12.92, 1.055*pow(c,vec3(1.0/2.4))-0.055, step(0.0031308,c)); }
   float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
   void main(){
@@ -318,7 +351,7 @@
     vec3 bl = uHasBloom == 1 ? texture(uBloom, uv).rgb : vec3(0.0);
     if (uBloomEdge > 0.0){ vec2 m = min(uv, 1.0 - uv)*vec2(uOutRes.x/uOutRes.y, 1.0); bl *= smoothstep(0.0, 0.22, min(m.x, m.y)); }
     vec3 hdr = (max(a.rgb,0.0) + bl*uBloomAmt)*uExposure;
-    vec3 c = uTone == 1 ? toSrgb(neutral(hdr)) : toSrgb(agxEotf(look(agx(hdr))));
+    vec3 c = uTone == 1 ? toSrgb(neutral(hdr)) : uTone == 2 ? toSrgb(aces(hdr)) : toSrgb(agxEotf(look(agx(hdr))));
     if (uUseGain > 0.0) c = min(c*uGain, vec3(1.0));
     float fe = 1.0; if (uFeather > 0.0){ vec2 m = min(uv, 1.0 - uv)*vec2(uOutRes.x/uOutRes.y, 1.0); fe = smoothstep(0.0, uFeather, min(m.x, m.y)); if (uTransparent < 0.5) c = mix(uPage, c, fe); }
     vec2 q = (uv-0.5)*vec2(uOutRes.x/uOutRes.y,1.0);
@@ -362,7 +395,7 @@
   };
 
   const THEMES = {
-    dark: { mode: 0, bg: [0.0125, 0.0125, 0.0142], tone: 0, exposure: 1, bloomK: 1, vignetteK: 0.45, beamK: 1, ambient: null, lightK: 1 },
+    dark: { mode: 0, bg: [0.0072, 0.0072, 0.0082], tone: 2, exposure: 1, bloomK: 0.9, bloomTh: 0.35, vignetteK: 0.45, beamK: 1, ambient: null, lightK: 1 },
     light: { mode: 1, bg: [0.74, 0.715, 0.675], tone: 1, exposure: 0.97, bloomK: 0.35, vignetteK: 0.35, beamK: 0.42, ambient: 0.22, lightK: 0.75 },
   };
   // ───────────────────────────────────────── small math
@@ -432,15 +465,29 @@
       const b = (B[i0] * (1 - tx) + B[i0 + 1] * tx) * (1 - ty) + (B[i0 + s] * (1 - tx) + B[i0 + s + 1] * tx) * ty;
       this._db = b + o; return a + o;
     }
-    sdf(x, y, z) { // identical to the shader's extrude()
-      const sh = this.sh; const d2 = this.f(x, y), db = this._db;
+    /** Cubic B-spline sample of both channels (same filter as the shader's fieldS, which shades the visible surface). */
+    fS(x, y) {
+      const s = this.s, cx = clamp(x, -1, 1), cy = clamp(y, -1, 1);
+      const fx = (cx * 0.5 + 0.5) * s - 0.5, fy = (0.5 - cy * 0.5) * s - 0.5;
+      const ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+      const w = (t) => { const t2 = t * t, t3 = t2 * t; return [(1 - 3 * t + 3 * t2 - t3) / 6, (4 - 6 * t2 + 3 * t3) / 6, (1 + 3 * t + 3 * t2 - 3 * t3) / 6, t3 / 6]; };
+      const wx = w(tx), wy = w(ty); let a = 0, b = 0;
+      for (let j = 0; j < 4; j++) { const yy = clamp(iy - 1 + j, 0, s - 1) * s;
+        for (let i = 0; i < 4; i++) { const k = yy + clamp(ix - 1 + i, 0, s - 1), ww = wx[i] * wy[j]; a += this.R[k] * ww; b += this.G[k] * ww; } }
+      const o = Math.hypot(Math.max(Math.abs(x) - 1, 0), Math.max(Math.abs(y) - 1, 0));
+      this._db = b + o; return a + o;
+    }
+    sdfS(x, y, z) { const d2 = this.fS(x, y); return this._ext(d2, this._db, z); }
+    sdf(x, y, z) { const d2 = this.f(x, y); return this._ext(d2, this._db, z); }
+    _ext(d2, db, z) { // identical to the shader's extrude()
+      const sh = this.sh;
       let hz = sh.depth;
       if (sh.inflate > 0) { const k = clamp(-db / Math.max(sh.inset, 1e-3), 0, 1); hz *= lerp(1, 0.3 + 0.7 * (1 - (1 - k) * (1 - k)), sh.inflate); }
       const r = Math.min(sh.bevel, hz * 0.98);
       const wx = d2 + r, wy = Math.abs(z) - hz + r;
       return Math.min(Math.max(wx, wy), 0) + Math.hypot(Math.max(wx, 0), Math.max(wy, 0)) - r;
     }
-    n(x, y, z) { const h = 0.0025; const gx = this.sdf(x + h, y, z) - this.sdf(x - h, y, z), gy = this.sdf(x, y + h, z) - this.sdf(x, y - h, z), gz = this.sdf(x, y, z + h) - this.sdf(x, y, z - h); const l = Math.hypot(gx, gy, gz) || 1; return [gx / l, gy / l, gz / l]; }
+    n(x, y, z) { const h = 0.0025; const gx = this.sdfS(x + h, y, z) - this.sdfS(x - h, y, z), gy = this.sdfS(x, y + h, z) - this.sdfS(x, y - h, z), gz = this.sdfS(x, y, z + h) - this.sdfS(x, y, z - h); /* smooth normals of the surface you see */ const l = Math.hypot(gx, gy, gz) || 1; return [gx / l, gy / l, gz / l]; }
     box(o, d) { const B = [this.ext[0] + 0.04, this.ext[1] + 0.04, this.sh.depth + 0.02]; let t0 = -1e9, t1 = 1e9;
       for (let i = 0; i < 3; i++) { if (Math.abs(d[i]) < 1e-9) { if (Math.abs(o[i]) > B[i]) return null; continue; } let a = (-B[i] - o[i]) / d[i], b = (B[i] - o[i]) / d[i]; if (a > b) [a, b] = [b, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, b); }
       return t1 > Math.max(t0, 0) ? [Math.max(t0, 0), t1] : null; }
@@ -462,6 +509,8 @@
         if (mirror) { const dn = dot3(v, n); v = [v[0] - 2 * dn * n[0], v[1] - 2 * dn * n[1], v[2] - 2 * dn * n[2]]; p = add3(p, n, 0.003); energy *= 0.92; exited = true; since = 0; pts[pts.length - 1][5] = energy; continue; }
         let r = refract3(v, n, 1 / nl);
         if (!r) { const dn = dot3(v, n); v = [v[0] - 2 * dn * n[0], v[1] - 2 * dn * n[1], v[2] - 2 * dn * n[2]]; p = add3(p, n, 0.003); continue; }
+        energy *= fresnelT(-dot3(v, n), 1, nl); // part of the light is reflected at the surface it enters
+        if (exited) energy *= 0.35; // light re-entering another part of the logo: keep these secondary fans quiet so one clean fan reads (art direction)
         v = r; p = add3(p, n, -0.002);
         let out = false;
         for (let b = 0; b < 5; b++) {
@@ -469,12 +518,11 @@
           p = [p[0] + v[0] * ti, p[1] + v[1] * ti, p[2] + v[2] * ti]; total += ti; push(p);
           const m = this.n(p[0], p[1], p[2]);
           const r2 = refract3(v, [-m[0], -m[1], -m[2]], nl);
-          if (r2) { v = r2; p = add3(p, m, 0.002); out = true; break; }
+          if (r2) { energy *= fresnelT(dot3(v, m), nl, 1); pts[pts.length - 1][5] = energy; v = r2; p = add3(p, m, 0.002); out = true; break; }
+          // total internal reflection is lossless: all the light carries on inside the glass
           const dn = dot3(v, m); v = [v[0] - 2 * dn * m[0], v[1] - 2 * dn * m[1], v[2] - 2 * dn * m[2]]; p = add3(p, m, -0.002);
-          energy *= 0.4; pts[pts.length - 1][5] = energy;
         }
         if (!out) return pts;
-        if (exited) { energy *= 0.55; pts[pts.length - 1][5] = energy; }
         exited = true; since = 0;
       }
       const L = 9; const end = [p[0] + v[0] * L, p[1] + v[1] * L, p[2] + v[2] * L]; if (exited) since += L; total += L; push(end);
@@ -484,6 +532,13 @@
   const smooth01 = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
   const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const add3 = (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
+  /** Exact unpolarised Fresnel transmittance (mean of s and p) for light going from n1 into n2; 0 under total internal reflection. */
+  function fresnelT(cosI, n1, n2) {
+    cosI = Math.min(1, Math.max(0, cosI)); const eta = n1 / n2, s2 = eta * eta * (1 - cosI * cosI); if (s2 >= 1) return 0;
+    const cosT = Math.sqrt(1 - s2);
+    const rs = (n1 * cosI - n2 * cosT) / (n1 * cosI + n2 * cosT), rp = (n1 * cosT - n2 * cosI) / (n1 * cosT + n2 * cosI);
+    return 1 - 0.5 * (rs * rs + rp * rp);
+  }
   function refract3(v, n, eta) { const c = -dot3(v, n); const k = 1 - eta * eta * (1 - c * c); if (k < 0) return null; const s = eta * c - Math.sqrt(k); return [eta * v[0] + s * n[0], eta * v[1] + s * n[1], eta * v[2] + s * n[2]]; }
 
   // ───────────────────────────────────────── embed helpers: CSS colour → sRGB, tone curves (exact JS copies of COMPOSITE), inverse
@@ -499,7 +554,9 @@
   const AGX_MI = [1.19687900512017, -0.0528968517574562, -0.0529716355144438, -0.0980208811401368, 1.15190312990417, -0.0980434501171241, -0.0990297440797205, -0.0989611768448433, 1.15107367264116];
   function toneMapJS(c, tone) {
     let v;
-    if (tone === 1) {
+    if (tone === 2) {
+      v = c.map(x => clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0, 1));
+    } else if (tone === 1) {
       v = c.slice(); const x = Math.min(v[0], v[1], v[2]); const off = x < 0.08 ? x - 6.25 * x * x : 0.04; v = v.map(a => a - off);
       const peak = Math.max(v[0], v[1], v[2]); const sc = 0.76;
       if (peak >= sc) { const d = 1 - sc, np = 1 - d * d / (peak + d - sc); v = v.map(a => a * np / peak); const g = 1 - 1 / (0.15 * (peak - np) + 1); v = v.map(a => a + (np - a) * g); }
@@ -563,7 +620,7 @@
       this.field = null; this.fi = { size: 1, extent: [0.5, 0.5], maxInset: 0.05, blurInset: 0.05 };
       this.beam = new Beam3D();
 
-      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'dark'; this.lightMode = 'beam'; this.envYaw = 0; this.envYawT = 0;
+      this.material = 'glass'; this.shape = { thickness: 0.5, roundness: 0.65 }; this.theme = 'light'; this.lightMode = 'beam'; this.envYaw = 0; this.envYawT = 0;
       this.listeners = {};
       this.time = 0; this.frame = 0; this.samples = 0; this.paused = false;
       this.pointer = null; this.lastPointerT = -1e9;
@@ -612,13 +669,14 @@
     getMaterial() { return this.material; }
     setPointer(x, y) {
       if (x == null || y == null) { this.pointer = null; return; }
+      if (this.lastPointerT < -1e8 && this.target.off == null) this.target.off = this.aimOff || 0;
       this.pointer = [x, y]; this.lastPointerT = this.time;
     }
     setViewInsets({ right = 0, bottom = 0 } = {}) { if (this.ins.r === right && this.ins.b === bottom) return; this.ins = { r: Math.max(0, right), b: Math.max(0, bottom) }; this._dirty = true; }
     /** Spin the logo (pixels of drag). The beam is re-traced through the rotated solid every frame. */
     beginRotate() { this.rot.drag = true; this.rot.vy = 0; this.rot.vp = 0; this.rot.reset = false; }
     rotateBy(dx, dy) { const k = 0.0085; this.rot.yaw += dx * k; this.rot.pitch = clamp(this.rot.pitch + dy * k, -1.35, 1.35); this.rot.vy = this.rot.vy * 0.5 + dx * k * 30; this.rot.vp = this.rot.vp * 0.5 + dy * k * 30; this.rot.last = performance.now(); }
-    endRotate() { this.rot.drag = false; if (performance.now() - (this.rot.last || 0) > 90) { this.rot.vy = 0; this.rot.vp = 0; } }
+    endRotate() { this.rot.drag = false; this.rot.vy = 0; this.rot.vp = 0; } // no momentum: the logo moves only while it is held
     resetRotation() { this.rot.reset = true; this.rot.vy = 0; this.rot.vp = 0; }
     togglePause(v) { this.paused = typeof v === 'boolean' ? v : !this.paused; return this.paused; }
     cancelRender() { this._cancel = true; }
@@ -704,7 +762,7 @@
       const gl = this.gl, L = LOOKS[this.material], u = this.p.glass.u, fi = this.fi;
       gl.useProgram(this.p.glass.p);
       gl.uniform1i(u.uMaterial, this.material === 'glass' ? 0 : 1);
-      gl.uniform1f(u.uIor, IOR);
+      gl.uniform1f(u.uIor, GLASS_IOR);
       gl.uniform3fv(u.uAbsorb, L.absorb || [0, 0, 0]); gl.uniform1f(u.uBgDepth, L.bgDepth || 0.3);
       gl.uniform3fv(u.uChromeTint, L.tint || [1, 1, 1]); gl.uniform1f(u.uSpectral, L.spectral || 0);
       gl.uniform1f(u.uSky, L.sky ? (THEMES[this.theme].mode ? 0.62 : 0.8) : 0); gl.uniform1f(u.uGround, THEMES[this.theme].mode ? 0.02 : 0.006); gl.uniform1f(u.uSceneFloor, THEMES[this.theme].mode ? 0.95 : 0.0);
@@ -712,7 +770,7 @@
       const chromeM = this.material === 'chrome';
       gl.uniform1f(u.uAmbient, chromeM ? (T.mode ? 0.05 : 0.0) : (T.ambient != null ? T.ambient : (studio ? L.ambient * 3 : L.ambient))); gl.uniform1f(u.uHorizon, chromeM ? 0 : (T.mode ? 0.5 : L.horizon)); gl.uniform3fv(u.uSpecNorm, SPEC_NORM_SHADER);
       gl.uniform1f(u.uEnvThrough, T.mode ? (studio ? 0.25 : 0.08) : (studio ? 0.75 : (L.envThrough || 0)));
-      gl.uniform1f(u.uCauchyB, CAUCHY_B * (studio ? 0.5 : 0.22));
+      gl.uniform1f(u.uCauchyB, GLASS_CAUCHY_B);
       const S = this.shape, th = S.thickness, ro = S.roundness;
       const depth = clamp(L.shape.depth * Math.pow(2, (th - 0.5) * 2.4), 0.012, Math.max(fi.maxInset * (1.6 + 3.4 * th), 0.05));
       const bevelMax = Math.min(depth * 0.98, Math.max(fi.maxInset * 0.72, 0.004)); // keep the surface off the stroke's centre ridge
@@ -763,36 +821,60 @@
         if (score > bestScore) { bestScore = score; best = o; }
         if (cur != null && Math.abs(o - cur) < ext * 0.051) curScore = Math.max(curScore, score);
       }
-      if (cur != null && curScore > 0.002 && bestScore < curScore + 0.02) return cur; // hysteresis: don't hop between near-equal lines
-      return bestScore > 0.002 ? best : 0.06;
+      if (cur != null && curScore > 0.002 && bestScore < curScore + 0.035) return cur; // hysteresis: don't hop between near-equal lines
+      if (bestScore <= 0.002) return 0.06;
+      // refine around the coarse winner (1/4 grid steps) so the chosen line moves continuously with the light
+      const coarse = best;
+      for (let j = -3; j <= 3; j++) {
+        if (!j) continue; const o = coarse + j * ext * 0.0125;
+        const { o: org, dir } = this._beamRays(ang, o);
+        const a = this.beam.trace(org, dir, 420, false, R); if (a.length < 4) continue;
+        const b = this.beam.trace(org, dir, 680, false, R); if (b.length !== a.length) continue;
+        const m = this.beam.trace(org, dir, 550, false, R); if (m.length !== a.length) continue;
+        const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1));
+        const e = Math.min(a[a.length - 1][5], b[b.length - 1][5]);
+        const score = Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
+        if (score > bestScore) { bestScore = score; best = o; }
+      }
+      return best;
     }
     _buildBeam(ang, R) {
       const mirror = this.material === 'chrome';
-      const { o, dir, perp } = this._beamRays(ang);
-      const waves = mirror ? 1 : BEAM_WAVES;
+      const waves = mirror ? 1 : BEAM_WAVES, S = mirror ? 1 : BEAM_SLICES;
       const V = []; const I0 = (mirror ? 5.5 : 5.0) * THEMES[this.theme].beamK; const w0 = BEAM_WIDTH * 0.5;
-      const paths = [];
-      for (let k = 0; k < waves; k++) {
-        const bc = mirror ? { lam: 550, rgb: [1, 1, 1] } : BEAM_COLORS[k];
-        paths.push({ P: this.beam.trace(o, dir, bc.lam, mirror, R), rgb: bc.rgb });
-      }
       const base = I0 / 1.4 / waves;
-      const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
-      const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
-      for (let k = 0; k < waves; k++) {
-        const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
-        const same = !!B && A.length === B.length;
-        const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
-        const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : 0;
-        for (let i = 0; i + 1 < A.length; i++) {
-          const n = nRef(i, A);
-          this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
-          if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, base, w0, n);
+      // Gaussian profile across the finite beam (as vgpu's normalizedProfileWeights): weights sum to 1
+      const prof = [], wt = [];
+      for (let s = 0; s < S; s++) { const p = S === 1 ? 0 : -1 + 2 * s / (S - 1); prof.push(p); wt.push(Math.exp(-BEAM_EDGE * p * p)); }
+      const wsum = wt.reduce((a, b) => a + b, 0) || 1;
+      const off0 = this.aimOff || 0, mid = S >> 1;
+      for (let s = 0; s < S; s++) {
+        const { o, dir } = this._beamRays(ang, off0 + prof[s] * BEAM_HALF);
+        const paths = [];
+        for (let k = 0; k < waves; k++) {
+          const bc = mirror ? { lam: 550, rgb: [1, 1, 1] } : BEAM_COLORS[k];
+          paths.push({ P: this.beam.trace(o, dir, bc.lam, mirror, R), rgb: bc.rgb });
+        }
+        const sb = base * wt[s] / wsum; // this slice's share of the light
+        const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
+        const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
+        for (let k = 0; k < waves; k++) {
+          const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
+          const same = !!B && A.length === B.length;
+          const nb = same ? B : (Bp && Bp.length === A.length ? Bp : null);
+          // a colour with no same-route neighbour is an isolated ray: don't draw it as a full-strength line (it read as a hard streak)
+          const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : (mirror ? 0 : 1e9);
+          for (let i = 0; i + 1 < A.length; i++) {
+            const n = s === mid ? nRef(i, A) : Math.max(3, nRef(i, A) >> 1); // outer slices are soft: half the subdivision
+            // the bright white core (where colours still overlap) is drawn once, by the centre slice, at full strength
+            if (s === mid) this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
+            if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, sb, w0, n, this._rayDen(paths, k, i), this._rayDen(paths, k + 1, i));
+          }
         }
       }
       return new Float32Array(V);
     }
-    _fall(q) { return (q[5] == null ? 1 : q[5]) / Math.pow(1 + q[3] * 0.22, 1.25); }
+    _fall(q) { return (q[5] == null ? 1 : q[5]) / Math.pow(1 + q[3] * FADE_RATE, FADE_POWER); } // vgpu longitudinal falloff
     _lerpPt(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t, a[4] + (b[4] - a[4]) * t, a[5] + (b[5] - a[5]) * t]; }
     _seg(V, a, b, rgb, base, w0, sepA, sepB, fadeWithSep, n) {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); if (len < 1e-5) return;
@@ -808,17 +890,28 @@
         v(p0, i0, -1); v(p0, i0, 1); v(p1, i1, 1); v(p0, i0, -1); v(p1, i1, 1); v(p1, i1, -1);
       }
     }
-    _sheet(V, a0, a1, b0, b1, ca, cb, base, w0, n) {
+    /** Ray k's local spread at segment i (fraction t): mean distance to its same-route neighbours on BOTH sides
+     *  (a central difference, as in ray/photon differentials). Every strip touching ray k uses this same value,
+     *  so neighbouring strips agree along their shared edge and the fan has no brightness steps. */
+    _rayDen(paths, k, i) {
+      const A = paths[k].P, L = k > 0 && paths[k - 1].P.length === A.length ? paths[k - 1].P : null, R = k + 1 < paths.length && paths[k + 1].P.length === A.length ? paths[k + 1].P : null;
+      const d = (P, Q, t) => { const a = this._lerpPt(P[i], P[i + 1], t), b = this._lerpPt(Q[i], Q[i + 1], t); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
+      return (t) => { let s = 0, c = 0; if (L) { s += d(A, L, t); c++; } if (R) { s += d(A, R, t); c++; } return c ? s / c : 0; };
+    }
+    _sheet(V, a0, a1, b0, b1, ca, cb, base, w0, n, denA, denB) {
       const g = (sep) => clamp(sep / (w0 * 1.6), 0, 1) * 0.96 * w0 * 2 / Math.max(sep, w0 * 0.4);
+      const q = (sep) => 1 - smooth01((sep - 0.22) / 0.4); // neighbours on different routes fade out smoothly instead of popping
       for (let i = 0; i < n; i++) {
         const t0 = i / n, t1 = (i + 1) / n;
         const A0 = this._lerpPt(a0, a1, t0), A1 = this._lerpPt(a0, a1, t1), B0 = this._lerpPt(b0, b1, t0), B1 = this._lerpPt(b0, b1, t1);
         const s0 = Math.hypot(A0[0] - B0[0], A0[1] - B0[1], A0[2] - B0[2]), s1 = Math.hypot(A1[0] - B1[0], A1[1] - B1[1], A1[2] - B1[2]);
         if (s0 < 1e-4 && s1 < 1e-4) continue;
-        const q = (sep) => 1 - smooth01((sep - 0.22) / 0.4); // neighbours on different routes fade out smoothly instead of popping
-        const k0 = base * this._fall(A0) * g(s0) * q(s0), k1 = base * this._fall(A1) * g(s1) * q(s1);
+        // brightness lives on the RAYS (own fall-off × own spread), not on the strip → continuous across the fan
+        const ra0 = denA(t0), ra1 = denA(t1), rb0 = denB(t0), rb1 = denB(t1);
+        const kA0 = base * this._fall(A0) * g(ra0) * q(ra0), kA1 = base * this._fall(A1) * g(ra1) * q(ra1);
+        const kB0 = base * this._fall(B0) * g(rb0) * q(rb0), kB1 = base * this._fall(B1) * g(rb1) * q(rb1);
         const v = (p, c, k) => V.push(p[0], p[1], p[2], c[0] * k, c[1] * k, c[2] * k, 0);
-        v(A0, ca, k0); v(B0, cb, k0); v(B1, cb, k1); v(A0, ca, k0); v(B1, cb, k1); v(A1, ca, k1);
+        v(A0, ca, kA0); v(B0, cb, kB0); v(B1, cb, kB1); v(A0, ca, kA0); v(B1, cb, kB1); v(A1, ca, kA1);
       }
     }
     _uploadBeam(arr) { const gl = this.gl; gl.bindBuffer(gl.ARRAY_BUFFER, this.beamBuf); gl.bufferData(gl.ARRAY_BUFFER, arr, gl.DYNAMIC_DRAW); this.beamCount = arr.length / 7; }
@@ -870,7 +963,7 @@
       const gl = this.gl, p = this.p; if (!P.bloom.length) return false;
       gl.disable(gl.BLEND);
       gl.useProgram(p.pre.p); gl.activeTexture(gl.TEXTURE0); gl.uniform1i(p.pre.u.uSrc, 0); gl.bindTexture(gl.TEXTURE_2D, P.accum[P.cur].tex);
-      gl.uniform2f(p.pre.u.uTexel, 1 / P.w, 1 / P.h); gl.uniform1f(p.pre.u.uThreshold, this._bloomTh || 0.75); this._draw(P.bloom[0].fb, P.bloom[0].w, P.bloom[0].h);
+      gl.uniform2f(p.pre.u.uTexel, 1 / P.w, 1 / P.h); gl.uniform1f(p.pre.u.uThreshold, this._bloomTh || THEMES[this.theme].bloomTh || 0.75); this._draw(P.bloom[0].fb, P.bloom[0].w, P.bloom[0].h);
       gl.useProgram(p.down.p); gl.uniform1i(p.down.u.uSrc, 0);
       for (let i = 1; i < P.bloom.length; i++) { const s = P.bloom[i - 1], d = P.bloom[i]; gl.bindTexture(gl.TEXTURE_2D, s.tex); gl.uniform2f(p.down.u.uTexel, 1 / s.w, 1 / s.h); this._draw(d.fb, d.w, d.h); }
       gl.useProgram(p.up.p); gl.uniform1i(p.up.u.uSrc, 0); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -901,21 +994,30 @@
     _updateTargets(dt) {
       const W = this.canvas.clientWidth || 1, H = this.canvas.clientHeight || 1; const cam = this._insetCam(W, H);
       if (this.pointer) {
-        // pointer → point on the logo plane (approx: un-tilted camera); light comes FROM the pointer side
-        const tanF = Math.tan(15 * DEG) * cam.k; const nx = (this.pointer[0] / W * 2 - 1) - cam.cx, ny = (1 - this.pointer[1] / H * 2) - cam.cy;
-        const x = nx * (W / H) * tanF * 4.6, y = ny * tanF * 4.6;
-        const dx = x - 0.0, dy = y - 0.06; const r = Math.hypot(dx, dy);
-        if (r > 0.35) this.target.ang = Math.atan2(dy, dx);
-        this.target.yaw = clamp(x / 3, -1, 1) * 0.12; this.target.pitch = clamp(-y / 2, -1, 1) * 0.07; this.envYawT = clamp(x / 2.6, -1, 1) * 0.9;
-      } else if (this.time - this.lastPointerT > 3.5 && !this.paused) {
-        // idle: slow seamless drift of the light (6 s period)
-        // idle: glide to a calm resting pose and stop, so the image settles into a crisp still
+        // vgpu model: height swings the light source along an arc (top → light from upper-left), width chooses the point of
+        // impact across the logo. A direct, predictable mapping: no search moves the beam behind the user's back.
+        const u = clamp(this.pointer[0] / W, 0, 1), v = clamp(this.pointer[1] / H, 0, 1);
+        const ext = Math.max(this.fi.extent[0], this.fi.extent[1]);
+        this.target.ang = Math.PI + (v - 0.5) * 2 * AIM_ARC;
+        this.target.off = (u - 0.5) * 2 * AIM_REACH * ext;
+        // hover only steers the light: the logo itself never tilts or moves unless the user drags it
+        this.target.yaw = 0; this.target.pitch = 0; this.envYawT = (u * 2 - 1) * 0.9;
+      } else if (this.lastPointerT < -1e8 && !this.paused) {
+        // no pointer yet: rest pose (smart aim picks the opening line). Once the user has aimed, the light stays where they left it.
         this.target.ang = Math.PI + 0.2; this.target.yaw = 0.0; this.target.pitch = 0.0; this.envYawT = 0.35;
+      } else {
+        // pointer left: like vgpu, only the hover tilt relaxes; the light itself stays exactly where it was
+        this.target.yaw = 0.0; this.target.pitch = 0.0;
       }
       // critically damped follow (angles wrap)
-      const k = 1 - Math.exp(-dt * 2.6); // slow, critically damped follow: elegant, no jitter
+      const ka = 1 - Math.pow(1 - AIM_LERP, dt * 60), kt = 1 - Math.pow(1 - ORBIT_LERP, dt * 60); // vgpu easing, frame-rate independent
       let da = this.target.ang - this.aim.ang; da = Math.atan2(Math.sin(da), Math.cos(da));
-      this.aim.ang += da * k; this.aim.yaw += (this.target.yaw - this.aim.yaw) * k; this.aim.pitch += (this.target.pitch - this.aim.pitch) * k; this.envYaw += (this.envYawT - this.envYaw) * k;
+      this.aim.ang += da * ka; this.aim.yaw += (this.target.yaw - this.aim.yaw) * kt; this.aim.pitch += (this.target.pitch - this.aim.pitch) * kt; this.envYaw += (this.envYawT - this.envYaw) * kt;
+      // snap the sub-pixel tail so the image stops 'moving' (and sharpens) as soon as the motion is invisible
+      if (Math.abs(Math.atan2(Math.sin(this.target.ang - this.aim.ang), Math.cos(this.target.ang - this.aim.ang))) < 6e-4) this.aim.ang = this.target.ang;
+      if (Math.abs(this.target.yaw - this.aim.yaw) < 2e-4) this.aim.yaw = this.target.yaw;
+      if (Math.abs(this.target.pitch - this.aim.pitch) < 2e-4) this.aim.pitch = this.target.pitch;
+      if (Math.abs(this.envYawT - this.envYaw) < 1e-3) this.envYaw = this.envYawT;
       return cam;
     }
     _loop(now) {
@@ -931,10 +1033,22 @@
       else if (!r.drag && (Math.abs(r.vy) > 1e-4 || Math.abs(r.vp) > 1e-4)) { r.yaw += r.vy * dt; r.pitch = clamp(r.pitch + r.vp * dt, -1.35, 1.35); const d = Math.exp(-dt * 2.6); r.vy *= d; r.vp *= d; if (Math.abs(r.vy) < 1e-3) r.vy = 0; if (Math.abs(r.vp) < 1e-3) r.vp = 0; }
       const pose = this._pose(); const Rm = rotYX(pose.yaw, pose.pitch);
       const rotKey = pose.yaw.toFixed(4) + ',' + pose.pitch.toFixed(4);
-      if (this.field && (this._bestAng == null || Math.abs(this.aim.ang - this._bestAng) > 0.01 || rotKey !== this._bestRot || this._dirty)) {
-        if (!this._bestT || now - this._bestT > 60 || this._dirty) { this._bestT = now; this._bestAng = this.aim.ang; this._bestRot = rotKey; this._bestOff = this._bestOffset(this.aim.ang, Rm); }
+      // smart aim searches at the light's DESTINATION (target), not its current angle, so the chosen line arrives together
+      // with the light instead of hopping sideways after the cursor has stopped
+      const steered = this.lastPointerT > -1e8;
+      if (steered) {
+        const t = this.target.off ?? this.aimOff ?? 0, cur = this.aimOff ?? t;
+        this.aimOff = cur + (t - cur) * (1 - Math.pow(1 - AIM_LERP, dt * 60)); if (Math.abs(t - this.aimOff) < 5e-4) this.aimOff = t;
+        this._bestOff = null; this._bestAng = null;
       }
-      if (this._bestOff != null) { this.aimOff = (this.aimOff ?? this._bestOff) + (this._bestOff - (this.aimOff ?? this._bestOff)) * (1 - Math.exp(-dt * 1.4)); }
+      const tA = this.target.ang, tKey = this.rot.yaw.toFixed(4) + ',' + this.rot.pitch.toFixed(4) + '|' + this.target.yaw.toFixed(3) + ',' + this.target.pitch.toFixed(3);
+      if (!steered && this.field && (this._bestAng == null || Math.abs(tA - this._bestAng) > 0.01 || tKey !== this._bestRot || this._dirty)) {
+        if (!this._bestT || now - this._bestT > 33 || this._dirty) {
+          this._bestT = now; this._bestAng = tA; this._bestRot = tKey;
+          this._bestOff = this._bestOffset(tA, rotYX(this.rot.yaw + this.target.yaw, clamp(this.rot.pitch + this.target.pitch, -1.45, 1.45)));
+        }
+      }
+      if (!steered && this._bestOff != null) { { const cur = this.aimOff ?? this._bestOff, lim = dt * 0.9; this.aimOff = cur + clamp((this._bestOff - cur) * (1 - Math.exp(-dt * 8)), -lim, lim); } if (Math.abs(this._bestOff - this.aimOff) < 5e-4) this.aimOff = this._bestOff; } // quick for small corrections; a line switch becomes a smooth slide (<=0.9 units/s), never a jump
       const key = [(this.aimOff || 0).toFixed(4), this.envYaw.toFixed(4), this.aim.ang.toFixed(4), pose.yaw.toFixed(4), pose.pitch.toFixed(4), cam.cx.toFixed(4), cam.cy.toFixed(4), cam.k.toFixed(4)].join('|');
       const moving = key !== this._key; this._key = key;
       this._ft = this._ft * 0.9 + dt * 1000 * 0.1;

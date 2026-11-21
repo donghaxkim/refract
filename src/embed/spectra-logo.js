@@ -61,7 +61,7 @@
     get text() { return this.getAttribute('text'); } set text(v) { this._setAttr('text', v); }
     get sample() { return this.getAttribute('sample'); } set sample(v) { this._setAttr('sample', v); }
     get font() { return this.getAttribute('font'); } set font(v) { this._setAttr('font', v); }
-    get material() { return this.getAttribute('material') === 'chrome' ? 'chrome' : 'glass'; } set material(v) { this._setAttr('material', v); }
+    get material() { return 'glass'; } // chrome hidden for now set material(v) { this._setAttr('material', v); }
     get light() { return this.getAttribute('light') === 'studio' ? 'studio' : 'beam'; } set light(v) { this._setAttr('light', v); }
     get theme() { return this._theme(); } set theme(v) { this._setAttr('theme', v); }
     get background() { return this.getAttribute('background'); } set background(v) { this._setAttr('background', v); }
@@ -155,9 +155,7 @@
       this._emit('error', { phase, message: String(err && err.message || err), error: err });
     }
     _theme() {
-      const t = this.getAttribute('theme'); if (t === 'dark' || t === 'light') return t;
-      const bg = this.getAttribute('background'); if (bg && !this.transparent) { const l = cssLuma(bg); if (l != null) return l > 0.3 ? 'light' : 'dark'; }
-      return 'dark';
+      return 'light'; // the light background is the only one for now (dark theme kept in the engine)
     }
     _applySettings() {
       const e = this.engine; if (!e) return;
