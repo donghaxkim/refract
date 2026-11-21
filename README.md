@@ -10,7 +10,8 @@ Open `dist/index.html` in a browser. It's one self-contained file, so you can dr
 - **Glass / Chrome:** dispersive glass or polished silver.
 - **Light:** **Beam** (light through your logo) or **Studio** (soft room light), on a **Dark** or **Light** background.
 - **Export:** a PNG at 2×, or a seamless 6-second H.264 MP4 loop for Twitter.
-- **Interaction:** hover steers the light, drag spins the logo, double-click resets, `H` hides the interface, `Space` pauses.
+- **Camera** (`K`): pick an aspect (Free, 1:1, 4:5, 9:16, 16:9) and a resolution (1080p, 2K, 4K), then shoot. **Photo** renders a PNG offline, framed exactly like the viewfinder (optionally with a transparent background). **Video** records your steering and spinning, lets you trim it on a filmstrip, then re-renders every frame offline to H.264 MP4 at 30 or 60 fps, so it's smooth however laggy the live view was. **Loop** renders the 6-second loop at the chosen framing. `Esc` steps back.
+- **Interaction:** hover steers the light, drag spins the logo, double-click resets, `H` hides the interface, `Space` pauses, `K` opens the camera.
 
 ## Develop
 
@@ -24,6 +25,7 @@ npm run build   # combines src/ into dist/index.html
 | `src/sdf.js` | SVG / PNG / text → signed distance field (runs in a Web Worker) |
 | `src/samples.js` | The six built-in sample marks |
 | `src/ui.html` / `ui.css` / `ui.js` | The interface |
+| `src/camera.js` | Camera mode: viewfinder, shutter, recording, trimmer (UX adapted from [3dsvg](https://github.com/renatoworks/3dsvg) by Renato Costa, MIT) |
 | `build.mjs` | Combines everything into `dist/index.html` |
 
 MP4 export loads [mp4-muxer](https://github.com/Vanilagy/mp4-muxer) from jsDelivr on demand; nothing else is external.

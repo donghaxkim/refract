@@ -3657,8 +3657,8 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
     function measureReserve() {
       const el = st.state === 'preview' ? sheet : st.state === 'bar' ? bar : null; // recording / rendering keep the frame still
       if (!el || el.hidden) return;
-      const r = el.getBoundingClientRect(), rr = canvas.getBoundingClientRect();
-      st.reserve = Math.max(0, rr.bottom - r.top);
+      // layout box, not getBoundingClientRect: the entry animation's transform must not change the framing
+      st.reserve = Math.max(0, (canvas.clientHeight || window.innerHeight) - el.offsetTop);
     }
     function fit() {
       if (!st.open) return;
