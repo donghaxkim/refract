@@ -170,6 +170,9 @@ button.sp-row:hover, .sp-row-hit:hover { background: var(--sp-fill); }
 .sp-root button:disabled { cursor: default; opacity: 0.4; }
 .sp-root button.sp-row:disabled:hover, .sp-row-hit:disabled:hover { background: none; }
 
+/* 3D model rows: same rows, set off from image/video by a hairline */
+.sp-xp-3d { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--sp-line-2); }
+.sp-xp-3d[hidden] { display: none; }
 .sp-prog { padding: 10px 12px 12px; }
 .sp-prog[hidden] { display: none; }
 .sp-prog-top { display: flex; align-items: center; gap: 10px; }
