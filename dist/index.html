@@ -1785,16 +1785,23 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
   const lerp = (a, b, t) => a + (b - a) * t;
 
   // ───────────────────────────────────────── optics constants
-  // Real dense flint glass (≈ Schott SF2): n_d = 1.65, Abbe ≈ 32. Cauchy n(λ) = n_d + B(1/λ² − 1/λd²), B in µm².
-  // Matches vgpu's measured 'flint' preset (B = 0.0105). The old stylised B = 0.065 was ~6× real flint: a 26° fan through
-  // a 60° prism instead of ~5°, which swamped how each shape actually bends light.
-  // The BEAM uses vgpu's 'stylised' spectral material, n(λ) = 1.2 + 0.1/λ² (λ in µm), traced with exact Snell + Fresnel:
-  // a gentle bend with a wide, clean fan. Written here in Refract's form n_d + B(1/λ² − 1/λd²).
-  const IOR = 1.2 + 0.1 / (0.5876 * 0.5876), CAUCHY_B = 0.07; // vgpu's 0.1 eased slightly: arbitrary logos (not a clean prism) otherwise split into many crossing fans
-  // The GLASS itself is shaded as clear glass (≈ crown) with only a hint of dispersion: as on vgpu.sh, the colour lives
-  // in the beam, not smeared through the glass.
-  const GLASS_IOR = 1.52, GLASS_CAUCHY_B = 0.006;
-  const iorAt = (lamNm) => { const l = lamNm * 0.001; return IOR + CAUCHY_B * (1 / (l * l) - 1 / (0.5876 * 0.5876)); };
+  // The beam and the glass are one real material: SCHOTT SF2 dense flint (n_d = 1.64769, V_d = 33.85), from SCHOTT's published
+  // three-term Sellmeier fit, n²(λ) = 1 + Σ Bᵢλ² / (λ² − Cᵢ), λ in µm. It gives n = 1.6827 at 404.7 nm and 1.6390 at 706.5 nm,
+  // as on the datasheet. A 60° prism of it spreads white light over about 3–4°, as real flint does.
+  // (Until 2.6 the beam used a stylised n(λ) = 1.2 + 0.1/λ² with ~7× real dispersion: violet hit total internal reflection while
+  // red passed, so turning the logo split the colours onto different paths and the beam broke up or vanished.)
+  const SF2 = { B: [1.40301821, 0.231767504, 0.939056586], C: [0.0105795466, 0.0493226978, 112.405955] };
+  const sellmeier = (lamNm, g) => { const l2 = (lamNm * 0.001) * (lamNm * 0.001); let s = 1; for (let i = 0; i < 3; i++) s += g.B[i] * l2 / (l2 - g.C[i]); return Math.sqrt(s); };
+  const IOR = sellmeier(587.6, SF2);
+  // DISPERSION widens the spread between colours around n_d: 1 is SF2 exactly, 3 (used here) fans the rainbow three times as wide
+  // so it reads at this scale. Everything else (n_d, Snell at every surface in 3D, Fresnel, total internal reflection) is computed
+  // as is; at 1 a beam through a logo is mostly white with coloured edges, as real glass gives.
+  const DISPERSION = 3;
+  const iorAt = (lamNm) => IOR + DISPERSION * (sellmeier(lamNm, SF2) - IOR);
+  // The glass shader uses a two-term Cauchy fit of the same glass, n_d + B(1/λ² − 1/λd²), through the F and C lines (within 0.002 from 420 to 700 nm).
+  const GLASS_IOR = IOR, GLASS_CAUCHY_B = (sellmeier(486.1, SF2) - sellmeier(656.3, SF2)) / (1 / (0.4861 * 0.4861) - 1 / (0.6563 * 0.6563));
+  // Smart aim's scores and thresholds were tuned on the old stylised fan; scale the real (narrower) fan into the same range.
+  const FAN_K = 0.07 * (1 / (0.42 * 0.42) - 1 / (0.68 * 0.68)) / (iorAt(420) - iorAt(680));
   const BEAM_WAVES = 56, BEAM_SLICES = 5, BEAM_WIDTH = 0.034;
   // vgpu-style finite beam: the spectral fan is the additive sum of BEAM_SLICES parallel sub-beams across the beam's width,
   // weighted by a soft Gaussian profile, so neighbouring fans overlap and blend instead of one thin line showing every ripple.
@@ -2408,7 +2415,7 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
       const pts = []; let total = 0, since = 0, exited = false, energy = 1;
       const push = (q) => { const w = toW(q); pts.push([w[0], w[1], w[2], exited ? since : 0, total, energy]); };
       push(p);
-      if (this.ok) for (let ev = 0; ev < 6; ev++) {
+      if (this.ok) for (let ev = 0; ev < 10; ev++) {
         const t = this.marchOut(p, v); if (t < 0) break;
         p = [p[0] + v[0] * t, p[1] + v[1] * t, p[2] + v[2] * t]; total += t; if (exited) since += t; push(p);
         const n = this.n(p[0], p[1], p[2]);
@@ -2416,10 +2423,9 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
         let r = refract3(v, n, 1 / nl);
         if (!r) { const dn = dot3(v, n); v = [v[0] - 2 * dn * n[0], v[1] - 2 * dn * n[1], v[2] - 2 * dn * n[2]]; p = add3(p, n, 0.003); continue; }
         energy *= fresnelT(-dot3(v, n), 1, nl); // part of the light is reflected at the surface it enters
-        if (exited) energy *= 0.35; // light re-entering another part of the logo: keep these secondary fans quiet so one clean fan reads (art direction)
         v = r; p = add3(p, n, -0.002);
         let out = false;
-        for (let b = 0; b < 5; b++) {
+        for (let b = 0; b < 16; b++) { // rounded glass can bounce light round inside several times before it finds a way out
           const ti = this.marchIn(p, v); if (ti < 0) break;
           p = [p[0] + v[0] * ti, p[1] + v[1] * ti, p[2] + v[2] * ti]; total += ti; push(p);
           const m = this.n(p[0], p[1], p[2]);
@@ -2611,7 +2617,11 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
     }
     setViewInsets({ right = 0, bottom = 0 } = {}) { if (this.ins.r === right && this.ins.b === bottom) return; this.ins = { r: Math.max(0, right), b: Math.max(0, bottom) }; this._dirty = true; }
     /** Spin the logo (pixels of drag). The beam is re-traced through the rotated solid every frame. */
-    beginRotate() { this.rot.drag = true; this.rot.vy = 0; this.rot.vp = 0; this.rot.reset = false; }
+    beginRotate() {
+      // the light belongs to the room, not the logo: once the logo is turned, smart aim stops re-picking the line and the beam stays
+      // exactly where it is, so what changes is only how the glass bends it
+      if (this.lastPointerT < -1e8) { this.target.off = this.aimOff || 0; this.lastPointerT = this.time; }
+      this.rot.drag = true; this.rot.vy = 0; this.rot.vp = 0; this.rot.reset = false; }
     rotateBy(dx, dy) { const k = 0.0085; this.rot.yaw += dx * k; this.rot.pitch = clamp(this.rot.pitch + dy * k, -1.35, 1.35); this.rot.vy = this.rot.vy * 0.5 + dx * k * 30; this.rot.vp = this.rot.vp * 0.5 + dy * k * 30; this.rot.last = performance.now(); }
     endRotate() { this.rot.drag = false; this.rot.vy = 0; this.rot.vp = 0; } // no momentum: the logo moves only while it is held
     resetRotation() { this.rot.reset = true; this.rot.vy = 0; this.rot.vp = 0; }
@@ -2761,7 +2771,7 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
       const a = this.beam.trace(org, dir, lo, false, R); if (a.length < 4) return -Infinity;
       const b = this.beam.trace(org, dir, hi, false, R); if (b.length !== a.length) return -Infinity;
       const m = this.beam.trace(org, dir, (lo + hi) / 2, false, R); if (m.length !== a.length) return -Infinity; // one coherent route for all colours
-      const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1));
+      const d = Math.acos(clamp(dot3(last(a), last(b)), -1, 1)) * FAN_K;
       const e = Math.min(a[a.length - 1][5], b[b.length - 1][5]);
       return Math.min(d, 0.22) * e - Math.abs(o) * 0.01 - (a.length - 4) * 0.012;
     }
@@ -2827,6 +2837,8 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
       this._restC = { key, ang }; return ang;
     }
     _buildBeam(ang, R, surf = this.room && !this.transparent) { // surf: clip to / light up the studio room (off for transparent output)
+      // no logo yet: draw no beam (it would cross the whole frame untouched), so the beam and the glass appear together
+      if (!this.beam.ok) { this._causticArr = new Float32Array(0); return new Float32Array(0); }
       const mirror = this.material === 'chrome', T = THEMES[this.theme];
       const src = this._src, lines = src.kind === 'lines' && !mirror, bands = src.bands; // white: bands === BEAM_COLORS
       // emission lines: one thin ribbon per line (no slicing: parallel copies of a line would read as a wide band, not a line)
