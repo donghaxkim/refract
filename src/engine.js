@@ -36,6 +36,9 @@
   // Beam slicing, per-ray spectral density and the pointer mapping/easing follow the prism hero in vercel-labs/vgpu
   // (apps/docs/.../prism-background: light-mesh.ts, interaction.ts), MIT License, Copyright (c) 2025 Vercel, Inc.
   const BEAM_HALF = 0.05, BEAM_EDGE = 2.2;
+  // brightness of the beam where it travels inside the glass, seen through the surface (clear glass scatters a little light, so a
+  // beam inside it shows as a fainter line; 1 would read like the beam in air)
+  const BEAM_INSIDE = 0.55;
   const FADE_RATE = 0.9, FADE_POWER = 2.2; // after leaving the glass the rainbow dissolves smoothly instead of running off-screen
   // vgpu interaction: pointer height swings the light along an arc, pointer width chooses where it strikes the logo.
   const AIM_ARC = 0.85, AIM_REACH = 0.72, AIM_LERP = 0.12, ORBIT_LERP = 0.08; // lerps are per 60 Hz frame (vgpu LAMP_AIM_LERP / CAMERA_ORBIT_LERP)
@@ -263,6 +266,49 @@
                 1.217*g1(l,437.0,11.8,36.0)+0.681*g1(l,459.0,26.0,13.8)); }
   vec3 xyz2rgb(vec3 c){ return mat3(3.2406,-0.9689,0.0557, -1.5372,1.8758,-0.2040, -0.4986,0.0415,1.0570)*c; }`;
 
+  // The rounded solid as a distance field (the same one the CPU beam tracer marches): shared by the glass and the beam overlay.
+  const SOLID = `
+  vec2 toUv(vec2 p){ return vec2(p.x*0.5+0.5, 0.5-p.y*0.5); }
+  float outside(vec2 p){ return length(max(abs(p)-1.0, 0.0)); }
+  vec2 fieldB(vec2 p){ return texture(uField, clamp(toUv(p),0.0,1.0)).rg + outside(p); }
+  float extrude(vec3 p, vec2 dd){
+    float d2 = dd.x; float hz = uDepth;
+    if (uInflate > 0.0){ float k = clamp(-dd.y/max(uMaxInset,1e-3),0.0,1.0); float pk = 1.0-(1.0-k)*(1.0-k); hz *= mix(1.0, 0.3+0.7*pk, uInflate); } // smooth dome, bounded slope
+    float r = min(uBevel, hz*0.98);
+    vec2 w = vec2(d2 + r, abs(p.z) - hz + r);
+    return min(max(w.x,w.y),0.0) + length(max(w,0.0)) - r;
+  }
+  float mapB(vec3 p){ return extrude(p, fieldB(p.xy)); }
+  vec2 boxHit(vec3 ro, vec3 rd){ vec3 inv = 1.0/rd; vec3 t0 = (-uBox-ro)*inv, t1 = (uBox-ro)*inv;
+    vec3 a = min(t0,t1), b = max(t0,t1); return vec2(max(max(a.x,a.y),a.z), min(min(b.x,b.y),b.z)); }`;
+
+  // The beam again, drawn over the glass where the glass would otherwise hide it. The scene pass draws the beam behind everything
+  // and the glass shows it only as seen through itself, so a beam in front of the glass, or travelling inside it, used to vanish
+  // as if it went behind the logo. Here each beam pixel follows the eye ray to the glass: in front of the glass it is drawn as is;
+  // inside the glass it is drawn dimmed (seen through the surface, lit by the little light glass scatters); behind the glass, or
+  // where no glass covers it, it is left to the scene pass.
+  const BEAM_OVER_VERT = `#version 300 es
+  layout(location=0) in vec3 aPos; layout(location=1) in vec3 aCol; layout(location=2) in float aV;
+  uniform mat4 uVP; out vec3 vCol; out float vV; out vec3 vW;
+  void main(){ gl_Position = uVP*vec4(aPos,1.0); vCol = aCol; vV = aV; vW = aPos; }`;
+  const BEAM_OVER_FRAG = `#version 300 es
+  precision highp float; in vec3 vCol; in float vV; in vec3 vW; out vec4 o;
+  uniform sampler2D uField; uniform mat3 uRotT; uniform float uCamDist, uInside;
+  uniform vec3 uBox; uniform float uDepth, uBevel, uInflate, uMaxInset;
+  ${SOLID}
+  void main(){
+    vec3 eW = vec3(0.0, 0.0, uCamDist), toP = vW - eW; float tp = length(toP);
+    vec3 ro = uRotT*eW, rd = uRotT*(toP/tp);
+    vec2 bh = boxHit(ro, rd); if (uDepth <= 0.0 || !(bh.x < bh.y && bh.y > 0.0)) discard;
+    float t = max(bh.x, 0.0); bool hit = false;
+    for (int i=0;i<200;i++){ float d = mapB(ro+rd*t); if (d < 0.00015 + t*0.00018){ hit = true; break; } t += max(d*0.7, 0.0002); if (t > bh.y) break; }
+    if (!hit) discard; // no glass on this pixel: the scene pass already shows the beam
+    float k = 1.0;
+    if (t < tp - 0.003){ if (mapB(uRotT*vW) > 0.0) discard; k = uInside; } // behind the glass: seen through it already; inside: dimmed
+    float r = abs(vV); float f = exp(-3.4*r*r)*(1.0-smoothstep(0.62,1.0,r));
+    o = vec4(vCol*f*k, 0.0);
+  }`;
+
   const GLASS_FRAG = `#version 300 es
   precision highp float; precision highp int;
   in vec2 vUv; out vec4 outColor;
@@ -288,9 +334,7 @@
 #if SRC_MODE == 2
   float lineAt(float u){ float l = uLines[0].x; for (int i=0;i<24;i++){ if (i>=uLineN) break; l = uLines[i].x; if (u <= uLines[i].y) break; } return l; }
 #endif
-  vec2 toUv(vec2 p){ return vec2(p.x*0.5+0.5, 0.5-p.y*0.5); }
-  float outside(vec2 p){ return length(max(abs(p)-1.0, 0.0)); }
-  vec2 fieldB(vec2 p){ return texture(uField, clamp(toUv(p),0.0,1.0)).rg + outside(p); }
+  ${SOLID}
   vec2 fieldS(vec2 p){
     vec2 st = clamp(toUv(p),0.0,1.0)*uFieldSize - 0.5; vec2 i = floor(st); vec2 f = st - i;
     vec2 f2 = f*f, f3 = f2*f;
@@ -300,19 +344,9 @@
     vec2 c = texture(uField, vec2(h0.x,h1.y)).rg, d = texture(uField, vec2(h1.x,h1.y)).rg;
     return g0.y*(g0.x*a+g1v.x*b) + g1v.y*(g0.x*c+g1v.x*d) + outside(p);
   }
-  float extrude(vec3 p, vec2 dd){
-    float d2 = dd.x; float hz = uDepth;
-    if (uInflate > 0.0){ float k = clamp(-dd.y/max(uMaxInset,1e-3),0.0,1.0); float pk = 1.0-(1.0-k)*(1.0-k); hz *= mix(1.0, 0.3+0.7*pk, uInflate); } // smooth dome, bounded slope
-    float r = min(uBevel, hz*0.98);
-    vec2 w = vec2(d2 + r, abs(p.z) - hz + r);
-    return min(max(w.x,w.y),0.0) + length(max(w,0.0)) - r;
-  }
-  float mapB(vec3 p){ return extrude(p, fieldB(p.xy)); }
   float mapS(vec3 p){ return extrude(p, fieldS(p.xy)); }
   vec3 normalAt(vec3 p){ const vec2 k = vec2(1.0,-1.0); float e = uNormEps;
     return normalize(k.xyy*mapS(p+k.xyy*e) + k.yyx*mapS(p+k.yyx*e) + k.yxy*mapS(p+k.yxy*e) + k.xxx*mapS(p+k.xxx*e)); }
-  vec2 boxHit(vec3 ro, vec3 rd){ vec3 inv = 1.0/rd; vec3 t0 = (-uBox-ro)*inv, t1 = (uBox-ro)*inv;
-    vec3 a = min(t0,t1), b = max(t0,t1); return vec2(max(max(a.x,a.y),a.z), min(min(b.x,b.y),b.z)); }
   bool marchOut(vec3 ro, vec3 rd, float t0, float t1, out float t, bool primary){
     // inflated faces are not an exact distance field: step conservatively; hit tolerance grows with distance (≈ pixel cone)
     t = t0; float sc = uInflate > 0.0 ? 0.6 : 0.85; float dmin = 1e9;
@@ -750,7 +784,7 @@
       this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
       this.p = {
         bg: program(gl, VERT, BG_FRAG), beam: program(gl, BEAM_VERT, BEAM_FRAG), dust: program(gl, DUST_VERT, DUST_FRAG),
-        glass: program(gl, VERT, glassFrag(0)), caustic: program(gl, CAUSTIC_VERT, CAUSTIC_FRAG), pre: program(gl, VERT, BLOOM_PRE), down: program(gl, VERT, BLOOM_DOWN), up: program(gl, VERT, BLOOM_UP), comp: program(gl, VERT, COMPOSITE),
+        glass: program(gl, VERT, glassFrag(0)), over: program(gl, BEAM_OVER_VERT, BEAM_OVER_FRAG), caustic: program(gl, CAUSTIC_VERT, CAUSTIC_FRAG), pre: program(gl, VERT, BLOOM_PRE), down: program(gl, VERT, BLOOM_DOWN), up: program(gl, VERT, BLOOM_UP), comp: program(gl, VERT, COMPOSITE),
       };
       // fullscreen triangle
       this.quadVao = gl.createVertexArray(); gl.bindVertexArray(this.quadVao);
@@ -960,6 +994,10 @@
       gl.uniform1f(u.uBevel, bevel);
       gl.uniform1f(u.uInflate, inflate); gl.uniform1f(u.uMaxInset, fi.blurInset || fi.maxInset);
       gl.uniform3fv(u.uBox, [fi.extent[0] + 0.03, fi.extent[1] + 0.03, depth + 0.01]);
+      { const o = this.p.over, ou = o.u; gl.useProgram(o.p); // the beam overlay marches the same solid
+        gl.uniform1f(ou.uDepth, this.field ? depth : 0); gl.uniform1f(ou.uBevel, bevel); gl.uniform1f(ou.uInflate, inflate); gl.uniform1f(ou.uMaxInset, fi.blurInset || fi.maxInset);
+        gl.uniform3fv(ou.uBox, [fi.extent[0] + 0.03, fi.extent[1] + 0.03, depth + 0.01]); gl.uniform1f(ou.uInside, BEAM_INSIDE); gl.uniform1i(ou.uField, 0);
+        gl.useProgram(this.p.glass.p); }
       gl.uniform1f(u.uFieldSize, fi.size); gl.uniform1f(u.uNormEps, Math.max(3.4 / fi.size, 0.0016));
       if (this._fr) this.beam.set(this._fr, this._fg, fi.size, { depth, bevel, inflate, inset: fi.blurInset || fi.maxInset }, fi.extent);
       this._lights = L.lights.map(l => {
@@ -1303,6 +1341,18 @@
       gl.uniform3fv(u.uLD, LD); gl.uniform3fv(u.uLT, LT); gl.uniform3fv(u.uLB, LB); gl.uniform2fv(u.uLS, LS); gl.uniform3fv(u.uLC, LC); gl.uniform1iv(u.uLK, LK);
       gl.uniform3fv(u.uUp, mulT(R, [0, 1, 0]));
       this._draw(dst.fb, P.w, P.h);
+      if (this.beamCount && this.lightMode === 'beam' && this.field) { // the beam where the glass would hide it (see BEAM_OVER_FRAG)
+        const o = this.p.over; gl.useProgram(o.p);
+        gl.uniformMatrix4fv(o.u.uVP, false, viewProj(null, dist, tanF, aspect, cxJ, cyJ));
+        gl.uniformMatrix3fv(o.u.uRotT, false, new Float32Array([R[0][0], R[0][1], R[0][2], R[1][0], R[1][1], R[1][2], R[2][0], R[2][1], R[2][2]]));
+        gl.uniform1f(o.u.uCamDist, dist);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
+        // added with weight 'blend', like the glass sample it sits on, so the accumulated image converges to glass + beam
+        gl.enable(gl.BLEND); gl.blendColor(0, 0, 0, blend); gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE); gl.colorMask(true, true, true, false);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, P.w, P.h);
+        gl.bindVertexArray(this.beamVao); gl.drawArrays(gl.TRIANGLES, 0, this.beamCount);
+        gl.colorMask(true, true, true, true); gl.disable(gl.BLEND); gl.bindVertexArray(null);
+      }
       P.cur = 1 - P.cur;
     }
     _bloom(P) {
