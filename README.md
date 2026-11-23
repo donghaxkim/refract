@@ -16,19 +16,29 @@ Open `dist/index.html` in a browser. It's one self-contained file, so you can dr
 
 ## Embed on your site
 
-`dist/refract-logo.js` is one file with no dependencies (~37 KB gzipped).
+`<refract-logo>` is one file with no dependencies. Load it from jsDelivr:
 
 ```html
-<script src="refract-logo.js"></script>   <!-- or: import './refract-logo.js' -->
-<refract-logo sample="hermes" background="#0b0b0c" style="height:480px"></refract-logo>
+<script src="https://cdn.jsdelivr.net/gh/donghaxkim/refract@v2.5.0/dist/refract-logo.js"></script>
+<refract-logo sample="meta" thickness="55" roundness="50" background="#f1eee6" style="display:block;height:480px"></refract-logo>
 ```
 
-- **Logo:** `src` (SVG/PNG URL, needs CORS if cross-origin), `text` (+ optional `font`), or `sample` (hermes, x, vercel).
-- **Look:** `light` (beam | studio), `source` (white | sun | tungsten | neon | sodium | mercury), `thickness`, `roundness` (0–100). Glass on the light theme only, for now.
+Or install it from npm (`npm install refract-logo`) and import it once:
+
+```js
+import 'refract-logo'                        // registers <refract-logo>
+import { RefractLogo } from 'refract-logo/react'
+<RefractLogo sample="meta" thickness={55} roundness={50} background="#f1eee6" style={{ height: 480 }} />
+```
+
+The playground at [refract.dongha.ca](https://refract.dongha.ca) writes this snippet for the logo and settings on screen.
+
+- **Logo:** `src` (SVG/PNG URL, needs CORS if cross-origin), `text` (+ optional `font`), or `sample` (meta, x, vercel, hermes).
+- **Look:** `light` (beam | studio), `source` (white | sun | tungsten | neon | sodium | mercury), `thickness`, `roundness` (0–100, on the playground's scales: thickness 55 and roundness 50 are the defaults; thickness below 65 is thinner than the app's slider goes). Glass on the light theme only, for now.
 - **Page:** set `background` to your page colour so the render blends into it. This keeps the full look, because the glass still has a backdrop to bend. `transparent` gives true alpha but looks flatter (WebGL can't see the page behind it). Avoid pure `#fff`: the beam can't be brighter than white, so use an off-white.
 - **Behaviour:** `interactive="false"` disables hover/drag; `poster` and `alt` for the fallback. Events: `ready`, `error` (`detail.phase`).
 - Loads lazily near the viewport, pauses offscreen and in hidden tabs, shows a still frame for reduced motion, and falls back to the poster (or a static logo) without WebGL2. Each instance uses one WebGL context, and browsers allow about 16 per page.
-- **React:** `import { RefractLogo } from './refract-logo-react.js'`. Props map to attributes; `onReady` and `onError` are forwarded. It's safe to import during server-side rendering.
+- **React:** the wrapper maps props to attributes and forwards `onReady` and `onError`. It's safe to import during server-side rendering.
 
 See `dist/embed-demo.html` (serve it over http).
 
@@ -38,6 +48,7 @@ See `dist/embed-demo.html` (serve it over http).
 npm run build         # app (dist/index.html) + embed (dist/refract-logo*.js)
 npm run build:app     # just the app
 npm run build:embed   # just the component
+npm publish           # publishes refract-logo (dist/refract-logo*.js only)
 ```
 
 | File | What it does |

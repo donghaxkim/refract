@@ -16,7 +16,11 @@
   const hasGL2 = () => { try { return !!window.WebGL2RenderingContext; } catch (e) { return false; } };
   const boolAttr = (v, dflt) => v == null ? dflt : !/^(false|off|0|no)$/i.test(String(v).trim());
   const truthy = (v) => v === '' || (!!v && !/^(false|off|0|no)$/i.test(String(v).trim()));
-  const num01 = (v, dflt) => { const n = parseFloat(v); return isFinite(n) ? Math.min(1, Math.max(0, n / 100)) : dflt; };
+  // thickness and roundness attributes are 0–100, on the same scales as the refract page on dongha.ca:
+  // thickness 65 is the engine's 0 (100 its thickest, below 65 thinner still); roundness 50 is the engine's 0.35.
+  const num100 = (v, dflt) => { const n = parseFloat(v); return isFinite(n) ? Math.min(100, Math.max(0, n)) : dflt; };
+  const engineThickness = (v) => (v >= 65 ? (v - 65) / 35 : (-1.2 * (65 - v)) / 65);
+  const engineRoundness = (v) => (v <= 50 ? (0.35 * v) / 50 : 0.35 + (0.65 * (v - 50)) / 50);
   let _pc = null;
   function cssLuma(c) { // relative luminance of a CSS colour, or null if it doesn't parse
     if (!_pc) { const cv = document.createElement('canvas'); cv.width = cv.height = 1; _pc = cv.getContext('2d', { willReadFrequently: true }); }
@@ -69,8 +73,8 @@
     get background() { return this.getAttribute('background'); } set background(v) { this._setAttr('background', v); }
     get transparent() { return boolAttr(this.getAttribute('transparent'), false); } set transparent(v) { this._setBool('transparent', v); }
     get interactive() { return boolAttr(this.getAttribute('interactive'), true); } set interactive(v) { this.setAttribute('interactive', v == null || truthy(v) ? 'true' : 'false'); }
-    get thickness() { return Math.round(num01(this.getAttribute('thickness'), 0.5) * 100); } set thickness(v) { this._setAttr('thickness', v); }
-    get roundness() { return Math.round(num01(this.getAttribute('roundness'), 0.65) * 100); } set roundness(v) { this._setAttr('roundness', v); }
+    get thickness() { return num100(this.getAttribute('thickness'), 55); } set thickness(v) { this._setAttr('thickness', v); }
+    get roundness() { return num100(this.getAttribute('roundness'), 50); } set roundness(v) { this._setAttr('roundness', v); }
     get poster() { return this.getAttribute('poster'); } set poster(v) { this._setAttr('poster', v); }
     get alt() { return this.getAttribute('alt'); } set alt(v) { this._setAttr('alt', v); }
     get ready() { return this._ready; }
@@ -165,7 +169,7 @@
       e.setTransparent(this.transparent);
       const bg = this.getAttribute('background');
       e.setBackground(bg && cssLuma(bg) != null ? bg : null);
-      const sh = { thickness: num01(this.getAttribute('thickness'), 0.5), roundness: num01(this.getAttribute('roundness'), 0.65) };
+      const sh = { thickness: engineThickness(this.thickness), roundness: engineRoundness(this.roundness) };
       const cur = e.getShape(); if (cur.thickness !== sh.thickness || cur.roundness !== sh.roundness) e.setShape(sh);
     }
     _reduced() { return !!(this._mq && this._mq.matches); }

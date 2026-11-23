@@ -1,8 +1,45 @@
 {
-  "name": "refract",
-  "version": "2.4.0",
-  "private": true,
-  "description": "Turn any logo into spectral glass or chrome: a light beam refracts through your logo and splits into a rainbow. WebGL2, zero dependencies.",
+  "name": "refract-logo",
+  "version": "2.5.0",
+  "description": "<refract-logo>: turn any logo into glass that splits a beam of light into a rainbow. One WebGL2 custom element, no dependencies, plus a React wrapper.",
+  "type": "module",
+  "main": "./dist/refract-logo.js",
+  "exports": {
+    ".": "./dist/refract-logo.js",
+    "./react": "./dist/refract-logo-react.js"
+  },
+  "files": [
+    "dist/refract-logo.js",
+    "dist/refract-logo-react.js"
+  ],
+  "sideEffects": [
+    "./dist/refract-logo.js",
+    "./dist/refract-logo-react.js"
+  ],
+  "peerDependencies": {
+    "react": ">=17"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "webgl",
+    "webgl2",
+    "logo",
+    "glass",
+    "refraction",
+    "rainbow",
+    "web-component",
+    "custom-element",
+    "react"
+  ],
+  "homepage": "https://refract.dongha.ca",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/donghaxkim/refract.git"
+  },
   "scripts": {
     "build": "node build.mjs && node build-embed.mjs",
     "build:app": "node build.mjs",

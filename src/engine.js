@@ -812,9 +812,9 @@
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, f.size, f.size, 0, gl.RG, gl.FLOAT, rg); this._tp(gl.LINEAR);
       this._fieldRound = this.shape.roundness;
     }
-    /** thickness 0..1 (0.5 = default), roundness 0..1 (0 = crisp edges, 1 = soft pebble) */
+    /** thickness -1.2..1 (0.5 = default; below 0 is thinner than the app's slider goes), roundness 0..1 (0 = crisp edges, 1 = soft pebble) */
     setShape({ thickness, roundness } = {}) {
-      if (typeof thickness === 'number') this.shape.thickness = clamp(thickness, 0, 1);
+      if (typeof thickness === 'number') this.shape.thickness = clamp(thickness, -1.2, 1);
       if (typeof roundness === 'number') this.shape.roundness = clamp(roundness, 0, 1);
       this._applyLook(); this._dirty = true;
       // re-filter the outline (corner rounding) once the slider settles
