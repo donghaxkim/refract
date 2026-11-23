@@ -2123,10 +2123,18 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
     // inflated faces are not an exact distance field: step conservatively; hit tolerance grows with distance (≈ pixel cone)
     t = t0; float sc = uInflate > 0.0 ? 0.6 : 0.85; float dmin = 1e9;
     for (int i=0;i<260;i++){ float d = mapB(ro+rd*t); float eps = 0.00015 + t*0.00018; if (d < eps) return true; dmin = min(dmin, d); t += max(d*sc, 0.00008); if (t > t1) break; }
-    return primary && dmin < 0.0012 && t <= t1 + 0.01; // grazing silhouette: treat a near miss as a hit instead of a dotted gap
+    return false;
+    // (Until 2.6 a primary ray that only came within 0.0012 of the glass was shaded as a hit. That point is not on the surface,
+    // so its normal and refraction were wrong, and silhouettes and rims broke into black and white dots. The jittered samples
+    // that build up each pixel antialias the true silhouette instead.)
   }
   float marchIn(vec3 ro, vec3 rd){ float t = 0.004; float sc = uInflate > 0.0 ? 0.6 : 0.85;
     for (int i=0;i<140;i++){ float d = -mapB(ro+rd*t); if (d < 0.0002) break; t += max(d*sc, 0.0002); } return t; }
+  // How far reflected directions fan out across this pixel (radians), set per pixel in main: geometric specular antialiasing
+  // after Kaplanyan et al. 2016 and Tokuyoshi & Kaplanyan 2019/2021. A tightly curved rim swings its normal across one pixel; a
+  // single sample then lands either on a studio light or off it, which read as glittering dots along every edge. Widening each
+  // light's edge by the pixel's spread makes that sample return the pixel's average instead.
+  float gSpread = 0.0;
   vec3 env(vec3 d){
     float up = dot(d,uUp);
     vec3 c = vec3(uAmbient*(0.25+0.75*clamp(up*0.5+0.5,0.0,1.0))) + vec3(uHorizon*exp(-abs(up)*9.0));
@@ -2142,6 +2150,7 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
       vec2 hs = uLS[i]; float mn = min(hs.x,hs.y); float rad = mn*0.9;
       vec2 q = abs(a) - hs + rad; float sd = length(max(q,0.0)) + min(max(q.x,q.y),0.0) - rad;
       float soft = (uLK[i]==1) ? 0.45*mn : 0.004 + 0.1*mn;
+      soft = sqrt(soft*soft + gSpread*gSpread); // the pixel's own spread of directions (see main)
       float m = 1.0 - smoothstep(-soft, soft, sd);
       m *= mix(0.6, 1.0, 1.0 - abs(a.y/hs.y)); // softbox falloff along length
       c += uLC[i]*m;
@@ -2237,9 +2246,14 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
     vec3 rdW = normalize(vec3(ndc.x*(uRes.x/uRes.y)*uTanFov, ndc.y*uTanFov, -1.0));
     vec3 ro = uRotT*vec3(0.0,0.0,uCamDist); vec3 rd = uRotT*rdW;
     vec3 c = scene(gl_FragCoord.xy/uRes); float cov = 0.0;
-    vec2 bh = boxHit(ro, rd); float t;
-    if (uDepth > 0.0 && bh.x < bh.y && bh.y > 0.0 && marchOut(ro, rd, max(bh.x,0.0), bh.y, t, true)){
-      vec3 p = ro + rd*t; vec3 n = normalAt(p);
+    vec2 bh = boxHit(ro, rd); float t = 0.0;
+    bool hit = uDepth > 0.0 && bh.x < bh.y && bh.y > 0.0 && marchOut(ro, rd, max(bh.x,0.0), bh.y, t, true);
+    vec3 p = ro + rd*t, n = vec3(0.0);
+    if (hit) n = normalAt(p);
+    // normal change across the 2×2 pixel quad, taken where every pixel runs it (derivatives need uniform control flow); a missed
+    // neighbour (n = 0) marks a silhouette, where the spread is largest. Reflection turns twice as fast as the normal.
+    gSpread = min(2.0*length(fwidth(n)), 0.5);
+    if (hit){
       c = uMaterial == 0 ? shadeGlass(p, n, rd) : shadeChrome(p, n, rd);
       if (uDebug == 1) c = n*0.5+0.5;
       if (uDebug == 2) c = vec3(fract(p.z*40.0), mapB(p)*500.0+0.5, -mapB(p)*500.0);
