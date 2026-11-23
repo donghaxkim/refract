@@ -19,7 +19,7 @@ Open `dist/index.html` in a browser. It's one self-contained file, so you can dr
 `<refract-logo>` is one file with no dependencies. Load it from jsDelivr:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/donghaxkim/refract@v2.5.0/dist/refract-logo.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/donghaxkim/refract@99b0c87334ceb77e59266d7047eff47f259fdc4f/dist/refract-logo.js"></script>
 <refract-logo sample="meta" thickness="55" roundness="50" background="#f1eee6" style="display:block;height:480px"></refract-logo>
 ```
 
