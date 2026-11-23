@@ -2909,21 +2909,24 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
         }
         const ref = paths[waves >> 1].P; // one subdivision per segment index for every wavelength → no T-junction steps
         const nRef = (i, A) => { const P = (ref.length === A.length ? ref : A); const a = P[i], b = P[i + 1]; return Math.max(4, Math.min(48, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 0.12))); };
+        // emission lines: separate ribbons, never a sheet (or a shared density) between them. Continuous light: a sheet only joins
+        // neighbours on the same route, decided SEGMENT BY SEGMENT (Q[k][i]: bands k and k+1 on segment i). Every colour shares the
+        // incoming beam, so neighbours that only part later (one is reflected inside the glass, the other gets out) are still joined
+        // up to there. (Judging whole paths dropped such colours from the white incoming beam too, tinting it before it reached the glass.)
+        const Q = []; if (!lines) for (let k = 0; k + 1 < waves; k++) Q.push(this._routeQs(paths[k].P, paths[k + 1].P));
         for (let k = 0; k < waves; k++) {
           const A = paths[k].P, B = k + 1 < waves ? paths[k + 1].P : null, Bp = k > 0 ? paths[k - 1].P : null;
-          // emission lines: separate ribbons, never a sheet (or a shared density) between them. Continuous light: a sheet only joins
-          // neighbours on the same route through the glass (rq fades it out smoothly where their hit points part)
-          const rq = !lines && B ? this._routeQ(A, B) : 0, same = rq > 0;
-          const nb = same ? B : (!lines && Bp && this._routeQ(A, Bp) > 0 ? Bp : null);
-          // a colour with no same-route neighbour is an isolated ray: don't draw it as a full-strength line (it read as a hard streak)
-          const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : (mirror ? 0 : 1e9);
           for (let i = 0; i + 1 < A.length; i++) {
+            const rq = !lines && B ? (Q[k][i] || 0) : 0, same = rq > 0;
+            const nb = same ? B : (!lines && Bp && (Q[k - 1][i] || 0) > 0 ? Bp : null);
+            // a colour with no same-route neighbour here is an isolated ray: don't draw it as a full-strength line (it read as a hard streak)
+            const sep = (j) => nb ? Math.hypot(A[j][0] - nb[j][0], A[j][1] - nb[j][1], A[j][2] - nb[j][2]) : (mirror ? 0 : 1e9);
             const n = s === mid ? nRef(i, A) : Math.max(3, nRef(i, A) >> 1); // outer slices are soft: half the subdivision
             // the bright white core (where colours still overlap) is drawn once, by the centre slice, at full strength.
             // Lines have no sheets: each line is its own full-strength ribbon.
             if (lines) this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, 0, 0, 0, n);
             else if (s === mid) this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
-            if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, sb * rq, w0, n, this._rayDen(paths, k, i), this._rayDen(paths, k + 1, i));
+            if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, sb * rq, w0, n, this._rayDen(paths, k, i, Q), this._rayDen(paths, k + 1, i, Q));
           }
         }
       }
@@ -2931,12 +2934,18 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
       const C = new Float32Array(cn); cn = 0; caustics.forEach(c => { C.set(c, cn); cn += c.length; }); this._causticArr = C;
       return new Float32Array(V);
     }
-    /** How surely two neighbouring bands took the same route through the glass (1 = same, 0 = different): same vertex count and
-     *  glass hit points that stay together (same-route neighbours sit < 0.03 apart; different faces are far apart). Smooth, no popping. */
-    _routeQ(A, B) {
-      if (A.length !== B.length) return 0; let m = 0;
-      for (let j = 1; j + 1 < A.length; j++) m = Math.max(m, Math.hypot(A[j][0] - B[j][0], A[j][1] - B[j][1], A[j][2] - B[j][2]));
-      return 1 - smooth01((m - 0.03) / 0.04);
+    /** How surely two neighbouring bands are still on the same route along each segment i (1 = same, 0 = parted), judged on the
+     *  glass hit points (same-route neighbours sit < 0.03 apart; different faces are far apart; smooth, no popping)
+     *  up to that segment's end (the paths' far ends are left out: there neighbours part by the fan's own spread). Once they part
+     *  they stay parted, and a segment only one of them has, or that ends one path but not the other, is not shared. */
+    _routeQs(A, B) {
+      const q = [], n = Math.min(A.length, B.length) - 1; let m = 0;
+      for (let i = 0; i < n; i++) {
+        const j = i + 1, endA = j === A.length - 1, endB = j === B.length - 1;
+        if (endA !== endB) { m = 1e9; } else if (!endA) m = Math.max(m, Math.hypot(A[j][0] - B[j][0], A[j][1] - B[j][1], A[j][2] - B[j][2]));
+        q.push(1 - smooth01((m - 0.03) / 0.04));
+      }
+      return q;
     }
     /** An incoming beam that starts outside the room (below the floor): move its start (in place) to where it enters the room, so it is
      *  never drawn inside a surface. Returns that point as a landing ({ p, n, d, q }) or null when the beam starts in the room. */
@@ -3043,8 +3052,8 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
     /** Ray k's local spread at segment i (fraction t): mean distance to its same-route neighbours on BOTH sides
      *  (a central difference, as in ray/photon differentials). Every strip touching ray k uses this same value,
      *  so neighbouring strips agree along their shared edge and the fan has no brightness steps. */
-    _rayDen(paths, k, i) {
-      const A = paths[k].P, L = k > 0 && this._routeQ(A, paths[k - 1].P) > 0 ? paths[k - 1].P : null, R = k + 1 < paths.length && this._routeQ(A, paths[k + 1].P) > 0 ? paths[k + 1].P : null; // same-route neighbours only
+    _rayDen(paths, k, i, Q) {
+      const A = paths[k].P, L = k > 0 && (Q[k - 1][i] || 0) > 0 ? paths[k - 1].P : null, R = k + 1 < paths.length && (Q[k][i] || 0) > 0 ? paths[k + 1].P : null; // same-route neighbours on this segment only
       const d = (P, Q, t) => { const a = this._lerpPt(P[i], P[i + 1], t), b = this._lerpPt(Q[i], Q[i + 1], t); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
       return (t) => { let s = 0, c = 0; if (L) { s += d(A, L, t); c++; } if (R) { s += d(A, R, t); c++; } return c ? s / c : 0; };
     }
