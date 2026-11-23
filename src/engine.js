@@ -220,25 +220,6 @@
   precision highp float; in vec3 vCol; in float vV; out vec4 o;
   void main(){ float r = abs(vV); float f = exp(-3.4*r*r)*(1.0-smoothstep(0.62,1.0,r)); o = vec4(vCol*f, 0.0); }`;
 
-  const DUST_VERT = `#version 300 es
-  layout(location=0) in vec4 aP; // xyz, seed
-  uniform mat4 uVPw; uniform float uTime, uPx, uFlipY; uniform sampler2D uGlow;
-  out float vB;
-  float h(float n){ return fract(sin(n*91.345)*47453.21); }
-  void main(){
-    float s = aP.w;
-    vec3 p = aP.xyz + vec3(sin(uTime*6.2831853/12.0 + s*40.0)*0.08, sin(uTime*6.2831853/6.0 + s*17.0)*0.05, 0.0);
-    vec4 c = uVPw*vec4(p,1.0); gl_Position = c;
-    vec2 uv = c.xy/c.w*0.5+0.5; if (uFlipY > 0.5) uv.y = 1.0-uv.y;
-    vec3 g = texture(uGlow, uv).rgb; float lit = dot(g, vec3(0.2126,0.7152,0.0722));
-    float tw = 0.55 + 0.45*sin(uTime*6.2831853*(1.0/3.0 + floor(h(s)*3.0)/3.0) + s*30.0);
-    vB = (0.012 + lit*1.6)*tw;
-    gl_PointSize = uPx*(0.9 + 1.8*h(s+1.0))*(4.2/max(c.w,0.5));
-  }`;
-  const DUST_FRAG = `#version 300 es
-  precision highp float; in float vB; out vec4 o; uniform vec3 uTint; // light source colour (white = 1,1,1)
-  void main(){ vec2 q = gl_PointCoord*2.0-1.0; float d = dot(q,q); float a = exp(-d*3.0)*(1.0-step(1.0,d)); o = vec4(uTint*vB*a, 0.0); }`;
-
   // caustic: where each wavelength's exit ray lands, one splat per band. A splat is that band's slit-shaped beam footprint swept
   // across to its neighbours (erf partition of unity → a seamless band for continuous light, separate stripes for lines)
   const CAUSTIC_VERT = `#version 300 es
@@ -797,7 +778,7 @@
       this.hdr = fOK ? { internal: gl.RGBA16F, type: gl.HALF_FLOAT } : { internal: gl.RGBA8, type: gl.UNSIGNED_BYTE };
       this.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
       this.p = {
-        bg: program(gl, VERT, BG_FRAG), beam: program(gl, BEAM_VERT, BEAM_FRAG), dust: program(gl, DUST_VERT, DUST_FRAG),
+        bg: program(gl, VERT, BG_FRAG), beam: program(gl, BEAM_VERT, BEAM_FRAG),
         glass: program(gl, VERT, glassFrag(0)), over: program(gl, BEAM_OVER_VERT, BEAM_OVER_FRAG), caustic: program(gl, CAUSTIC_VERT, CAUSTIC_FRAG), pre: program(gl, VERT, BLOOM_PRE), down: program(gl, VERT, BLOOM_DOWN), up: program(gl, VERT, BLOOM_UP), comp: program(gl, VERT, COMPOSITE),
       };
       // fullscreen triangle
@@ -816,14 +797,6 @@
       this.causticBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.causticBuf);
       [[0, 3, 0], [1, 2, 12], [2, 4, 20], [3, 3, 36], [4, 3, 48]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 60, off); });
       this.causticCount = 0; this._causticArr = new Float32Array(0);
-      // dust
-      this.dustVao = gl.createVertexArray(); gl.bindVertexArray(this.dustVao);
-      const N = 260, dd = new Float32Array(N * 4); let s = 7;
-      const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-      for (let i = 0; i < N; i++) { dd.set([(rnd() * 2 - 1) * 3.4, (rnd() * 2 - 1) * 2.0, (rnd() * 2 - 1) * 1.2, rnd()], i * 4); }
-      const db = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, db); gl.bufferData(gl.ARRAY_BUFFER, dd, gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
-      this.dustN = N;
       gl.bindVertexArray(null);
       // field
       this.fieldTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
@@ -1398,17 +1371,6 @@
       const T = THEMES[this.theme]; gl.uniform1i(u.uHasBloom, hb ? 1 : 0); gl.uniform1f(u.uExposure, L.exposure * T.exposure * (T.mode ? 1 / L.exposure : 1)); gl.uniform1f(u.uBloomAmt, L.bloom * T.bloomK); gl.uniform1i(u.uTone, T.tone);
       gl.uniform1f(u.uVignette, (transparent || this._bgLin) ? 0 : L.vignette * T.vignetteK); gl.uniform1f(u.uUseGain, this._bgGain && !transparent ? 1 : 0); gl.uniform1f(u.uBloomEdge, this._bgLin ? 1 : 0); gl.uniform1f(u.uFeather, this._bgLin && fb === null ? 0.07 : 0); gl.uniform3fv(u.uPage, transparent ? (this._pageDisp && fb === null ? this._pageDisp : [0, 0, 0]) : (this._bgSrgb || [0, 0, 0])); gl.uniform1f(u.uAlphaK, transparent && fb === null && this._pageDisp ? 1.0 : 0); if (this._bgGain) gl.uniform3fv(u.uGain, this._bgGain); gl.uniform1f(u.uFlip, flip ? 1 : 0); gl.uniform2f(u.uOutRes, w, h); gl.uniform1f(u.uTransparent, transparent ? 1 : 0);
       this._draw(fb, w, h);
-      // dust, lit by the beam's glow
-      if (hb && !transparent && this.theme === 'dark' && this.lightMode === 'beam') {
-        const d = this.p.dust; gl.useProgram(d.p);
-        const tanF = Math.tan(15 * DEG) * cam.k;
-        const VPw = viewProj(null, 4.6, tanF, w / h, cam.cx, cam.cy);
-        if (flip) { for (let i = 1; i < 16; i += 4) VPw[i] = -VPw[i]; }
-        gl.uniformMatrix4fv(d.u.uVPw, false, VPw); gl.uniform1f(d.u.uFlipY, flip ? 1 : 0); gl.uniform1f(d.u.uTime, time); gl.uniform1f(d.u.uPx, Math.max(1, h / 900) * 1.6); gl.uniform3fv(d.u.uTint, this._src.color);
-        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, P.bloom[Math.min(2, P.bloom.length - 1)].tex); gl.uniform1i(d.u.uGlow, 0);
-        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, w, h);
-        gl.bindVertexArray(this.dustVao); gl.drawArrays(gl.POINTS, 0, this.dustN); gl.disable(gl.BLEND);
-      }
     }
     _updateTargets(dt) {
       const W = this.canvas.clientWidth || 1, H = this.canvas.clientHeight || 1; const cam = this._insetCam(W, H);
