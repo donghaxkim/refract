@@ -2913,6 +2913,11 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
             // Lines have no sheets: each line is its own full-strength ribbon.
             if (lines) this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, 0, 0, 0, n);
             else if (s === mid) this._seg(V, A[i], A[i + 1], paths[k].rgb, base, w0, sep(i), sep(i + 1), mirror ? 0 : 1, n);
+            // where the ray bends (a refraction or a bounce), fill the outside corner between this ribbon and the next
+            if ((lines || s === mid) && i + 2 < A.length) {
+              const f = lines || mirror ? 1 : clamp(1 - sep(i + 1) / (w0 * 1.6), 0, 1);
+              if (f > 0) this._join(V, A[i], A[i + 1], A[i + 2], paths[k].rgb, base * this._fall(A[i + 1]) * f, w0);
+            }
             if (same && !mirror) this._sheet(V, A[i], A[i + 1], B[i], B[i + 1], paths[k].rgb, paths[k + 1].rgb, sb * rq, w0, n, this._rayDen(paths, k, i, Q), this._rayDen(paths, k + 1, i, Q));
           }
         }
@@ -3035,6 +3040,23 @@ button.rf-row:hover, .rf-row-hit:hover { background: var(--rf-fill); }
         const v = (p, c, side) => V.push(p[0] + nn[0] * w0 * side, p[1] + nn[1] * w0 * side, p[2] + nn[2] * w0 * side, rgb[0] * c, rgb[1] * c, rgb[2] * c, side);
         v(p0, i0, -1); v(p0, i0, 1); v(p1, i1, 1); v(p0, i0, -1); v(p1, i1, 1); v(p1, i1, -1);
       }
+    }
+    /** The outside corner where a ribbon bends at b (a → b → c): each straight ribbon ends square at b, which left a notch on the
+     *  outside of every bend. Triangles round b fill it, with the same cross-profile as the ribbon (centre bright, rim dark),
+     *  so the beam reads as one continuous stroke through refractions and bounces. */
+    _join(V, a, b, c, rgb, i0, w0) {
+      const dir = (p, q) => { const l = Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]); return l < 1e-6 ? null : [(q[0] - p[0]) / l, (q[1] - p[1]) / l, (q[2] - p[2]) / l]; };
+      const side = (d) => { let nn = cross(d, [0, 0, 1]); if (Math.hypot(...nn) < 0.15) nn = cross(d, [0, 1, 0]); return norm3(nn); }; // as in _seg
+      const d1 = dir(a, b), d2 = dir(b, c); if (!d1 || !d2 || dot3(d1, d2) > 0.9998) return; // straight on: nothing to fill
+      let n1 = side(d1), n2 = side(d2);
+      const sg = dot3(d2, n1) < 0 ? 1 : -1; // the outside of the turn is the side the ray turns away from
+      n1 = n1.map((v) => v * sg); n2 = n2.map((v) => v * sg);
+      const v = (p, side) => V.push(p[0], p[1], p[2], rgb[0] * i0, rgb[1] * i0, rgb[2] * i0, side);
+      // a flat (bevel) fill between the two ribbons' corners: it reaches no further out than the ribbons' own corners, so at a bounce
+      // nothing pokes out past the glass face. Turns past 90° get a middle corner so the fill doesn't thin out at the tip.
+      const rim = (q) => [b[0] + q[0] * w0, b[1] + q[1] * w0, b[2] + q[2] * w0];
+      const tri = (u, w) => { v(b, 0); v(rim(u), sg); v(rim(w), sg); };
+      if (dot3(n1, n2) < 0) { const m = dot3(n1, n2) < -0.99 ? d1 : norm3([n1[0] + n2[0], n1[1] + n2[1], n1[2] + n2[2]]); tri(n1, m); tri(m, n2); } else tri(n1, n2);
     }
     /** Ray k's local spread at segment i (fraction t): mean distance to its same-route neighbours on BOTH sides
      *  (a central difference, as in ray/photon differentials). Every strip touching ray k uses this same value,
